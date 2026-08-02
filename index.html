@@ -5,58 +5,39 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>PlayerVerify AI</title>
     
-    <!-- PWA Required Tags for PWABuilder -->
+    <!-- PWA Required Tags -->
     <meta name="description" content="PlayerVerify AI - Identity and Age Verification">
     <meta name="theme-color" content="#0f172a">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <!-- Links to the files PWABuilder will generate for you -->
     <link rel="manifest" href="manifest.json">
-    <link rel="apple-touch-icon" href="https://placehold.co/192x192/0f172a/ffffff?text=PV">
-
+    
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- HTML5 QR Code Scanner -->
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <!-- REAL AI Face Recognition Engine (face-api.js) -->
+    <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
 
     <style>
-        @keyframes scan {
-            0% { top: 0; opacity: 0; }
-            10% { opacity: 1; }
-            90% { opacity: 1; }
-            100% { top: 100%; opacity: 0; }
-        }
-        .animate-scan {
-            animation: scan 2s ease-in-out infinite;
-        }
-        .step-container {
-            display: none;
-            animation: fadeIn 0.5s ease-out forwards;
-        }
-        .step-container.active {
-            display: flex;
-        }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
+        @keyframes scan { 0% { top: 0; opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { top: 100%; opacity: 0; } }
+        .animate-scan { animation: scan 2s ease-in-out infinite; }
+        .step-container { display: none; animation: fadeIn 0.5s ease-out forwards; }
+        .step-container.active { display: flex; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 
     <script>
-        // Registering the Service Worker that PWABuilder generates
         if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('sw.js').catch(err => {
-                    console.log('SW not registered yet - PWABuilder will provide this.');
-                });
-            });
+            window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(err => console.log('SW not registered')); });
         }
     </script>
 </head>
 <body class="bg-slate-100 min-h-screen flex items-center justify-center p-4 font-sans text-slate-800">
 
-    <div class="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden relative min-h-[700px] flex flex-col">
+    <div class="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden relative min-h-[750px] flex flex-col">
         
         <!-- App Header -->
         <div class="bg-slate-900 text-white p-6 rounded-b-3xl shadow-md z-10">
@@ -64,65 +45,79 @@
             <i data-lucide="shield-check" class="text-emerald-400 w-8 h-8"></i>
             <div>
               <h1 class="text-xl font-bold tracking-tight">PlayerVerify <span class="text-emerald-400 text-sm align-top">AI</span></h1>
-              <p class="text-xs text-slate-400 font-medium">U-23 District Cricket Tournament</p>
+              <p class="text-xs text-slate-400 font-medium">Tournament Identity Verification</p>
             </div>
           </div>
         </div>
 
         <div class="flex-1 p-6 flex flex-col relative overflow-y-auto" id="app-content">
             
-            <!-- STEP 1: SCAN -->
-            <div id="step-scan" class="step-container active flex-1 flex-col justify-center items-center">
+            <!-- STEP 0: LOADING AI -->
+            <div id="step-loading" class="step-container active flex-1 flex-col justify-center items-center">
+                <div class="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-6"></div>
+                <h2 class="text-2xl font-bold mb-2">Initializing AI</h2>
+                <p class="text-slate-500 text-sm text-center px-4">Downloading facial recognition models to your device for offline processing...</p>
+            </div>
+
+            <!-- STEP 1: SCAN QR -->
+            <div id="step-scan" class="step-container flex-1 flex-col justify-center items-center">
                 <div class="text-center mb-8">
                   <h2 class="text-2xl font-bold mb-2">Scan Aadhaar QR</h2>
-                  <p class="text-slate-500 text-sm px-4">Upload or scan Aadhaar securely.</p>
+                  <p class="text-slate-500 text-sm px-4">Scan physical card or e-Aadhaar.</p>
                 </div>
-  
-                <div class="relative w-64 h-64 border-4 border-dashed border-blue-400 rounded-3xl flex items-center justify-center bg-blue-50 mb-12 overflow-hidden group">
+                
+                <div id="scan-ui-elements" class="relative w-64 h-64 border-4 border-dashed border-blue-400 rounded-3xl flex items-center justify-center bg-blue-50 mb-12 overflow-hidden group">
                   <i data-lucide="qr-code" class="w-24 h-24 text-blue-300"></i>
                   <div class="absolute top-0 left-0 w-full h-1 bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.8)] animate-scan"></div>
                 </div>
+
+                <div id="reader" class="w-full max-w-sm hidden mb-6 rounded-2xl overflow-hidden border-4 border-slate-200 bg-black"></div>
   
-                <button onclick="simulateScan()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition-colors shadow-lg flex items-center justify-center gap-2 text-lg">
+                <button id="scan-btn" onclick="startScanner()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition-colors shadow-lg flex items-center justify-center gap-2 text-lg">
                   <i data-lucide="scan-line" class="w-5 h-5"></i>
-                  Click to Scan / Upload QR
+                  Open Camera to Scan
                 </button>
             </div>
 
-            <!-- STEP 2: DATA COLLECTED -->
-            <div id="step-collected" class="step-container flex-1 flex-col justify-center items-center">
-                <div class="w-24 h-24 bg-emerald-100 rounded-full flex items-center justify-center mb-6">
-                   <i data-lucide="check-circle-2" class="w-12 h-12 text-emerald-600"></i>
+            <!-- STEP 2: ID PHOTO REFERENCE -->
+            <div id="step-reference" class="step-container flex-1 flex-col items-center">
+                <div class="w-full text-center mb-6">
+                  <h2 class="text-2xl font-bold mb-2">ID Photo</h2>
+                  <p class="text-slate-500 text-sm px-2">Web browsers cannot decrypt Aadhaar photos offline. Please snap a clear picture of the photo on the ID card.</p>
                 </div>
-                <h2 class="text-3xl font-black text-slate-800 mb-2 text-center">Data Collected</h2>
-                <p class="text-slate-500 text-center mb-10 px-6">
-                  Demographic data and Aadhaar photo extracted successfully from QR.
-                </p>
- 
-                <button onclick="goToSelfie()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-xl transition-colors shadow-lg flex items-center justify-center gap-2 text-lg">
-                  <i data-lucide="camera" class="w-6 h-6"></i>
-                  Start Selfie Verification
+  
+                <div class="relative w-48 h-64 rounded-2xl overflow-hidden bg-slate-900 border-4 border-slate-200 shadow-xl mb-6">
+                    <video id="ref-webcam" autoplay playsinline class="w-full h-full object-cover"></video>
+                    <img id="ref-image-preview" class="w-full h-full object-cover hidden" />
+                    <!-- Guide box for ID photo -->
+                    <div class="absolute inset-0 border-2 border-dashed border-white/50 m-4 rounded pointer-events-none"></div>
+                </div>
+  
+                <button id="ref-capture-btn" onclick="captureReferencePhoto()" class="w-full bg-slate-800 hover:bg-black text-white font-bold py-4 rounded-xl transition-colors shadow-lg flex items-center justify-center gap-2 text-lg mb-3">
+                  <i data-lucide="camera" class="w-6 h-6"></i> Capture ID Photo
+                </button>
+                <button id="ref-continue-btn" onclick="goToSelfie()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-4 rounded-xl transition-colors shadow-lg items-center justify-center gap-2 text-lg hidden">
+                  <i data-lucide="check" class="w-6 h-6"></i> Proceed to Live Selfie
                 </button>
             </div>
 
-            <!-- STEP 3: SELFIE -->
+            <!-- STEP 3: LIVE SELFIE -->
             <div id="step-selfie" class="step-container flex-1 flex-col items-center">
                 <div class="w-full text-center mb-6">
                   <h2 class="text-2xl font-bold mb-2">Live Verification</h2>
-                  <p class="text-slate-500 text-sm">Position your face to match Aadhaar.</p>
+                  <p class="text-slate-500 text-sm">Player must position their face to match with the ID.</p>
                 </div>
   
                 <div class="relative w-64 h-80 rounded-[4rem] overflow-hidden bg-slate-900 border-8 border-slate-100 shadow-xl mb-8 flex items-center justify-center">
                     <video id="webcam" autoplay playsinline muted class="w-full h-full object-cover transform -scale-x-100"></video>
-                    <div id="camera-error" class="absolute hidden flex-col items-center justify-center text-center p-4">
-                        <i data-lucide="alert-circle" class="w-10 h-10 text-rose-400 mb-2"></i>
-                        <p class="text-slate-300 text-sm">Camera unavailable. Simulating.</p>
-                    </div>
+                    <img id="selfie-image-preview" class="w-full h-full object-cover transform -scale-x-100 hidden" />
+                    <!-- Face Guide -->
+                    <div class="absolute inset-0 border-[6px] border-white/30 rounded-[4rem] pointer-events-none m-4"></div>
                 </div>
   
-                <button onclick="startProcessing()" class="w-full mt-auto bg-slate-900 hover:bg-black text-white font-bold py-4 rounded-xl transition-colors shadow-lg flex items-center justify-center gap-2 text-lg">
+                <button id="selfie-capture-btn" onclick="captureSelfieAndProcess()" class="w-full mt-auto bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-xl transition-colors shadow-lg flex items-center justify-center gap-2 text-lg">
                   <i data-lucide="camera" class="w-6 h-6"></i>
-                  Capture & Verify
+                  Capture & Run AI Match
                 </button>
             </div>
 
@@ -141,51 +136,51 @@
                 <div class="space-y-4 w-full px-8">
                   <div class="flex items-center gap-3 text-sm font-medium text-slate-600">
                     <i id="chk-1" data-lucide="check-circle-2" class="w-5 h-5 text-slate-300"></i>
-                    <span id="txt-1">Analyzing AI Face Match...</span>
+                    <span id="txt-1">Extracting Facial Features...</span>
                   </div>
                   <div class="flex items-center gap-3 text-sm font-medium text-slate-600">
                     <i id="chk-2" data-lucide="check-circle-2" class="w-5 h-5 text-slate-300"></i>
-                    <span id="txt-2">Calculating Exact Age...</span>
+                    <span id="txt-2">Running Neural Network Match...</span>
                   </div>
                   <div class="flex items-center gap-3 text-sm font-medium text-slate-600">
                     <i id="chk-3" data-lucide="check-circle-2" class="w-5 h-5 text-slate-300"></i>
-                    <span id="txt-3">Verifying Address...</span>
+                    <span id="txt-3">Verifying Age & Eligibility...</span>
                   </div>
                 </div>
             </div>
 
             <!-- STEP 5: RESULT -->
             <div id="step-result" class="step-container flex-1 flex-col items-center pt-2 pb-4">
-                <i data-lucide="check-circle-2" class="w-16 h-16 text-emerald-600 mb-2"></i>
-                <h2 class="text-2xl font-black text-slate-800 mb-1">Verification Complete</h2>
-                <p class="text-slate-500 mb-6 text-sm">Player details authenticated.</p>
+                <div id="result-status-icon" class="mb-2"></div>
+                <h2 id="result-status-title" class="text-2xl font-black text-slate-800 mb-1"></h2>
+                <p id="result-status-desc" class="text-slate-500 mb-6 text-sm"></p>
                 
-                <div class="w-full bg-emerald-50 border border-emerald-100 rounded-2xl p-5 mb-6 shadow-sm flex flex-col gap-4">
+                <div class="w-full bg-slate-50 border border-slate-200 rounded-2xl p-5 mb-6 shadow-sm flex flex-col gap-4">
                   
-                  <div class="flex justify-between items-center border-b border-emerald-100 pb-3">
+                  <div class="flex justify-between items-center border-b border-slate-200 pb-3">
                     <div>
                       <p class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Name</p>
                       <p id="res-name" class="font-bold text-slate-800 text-lg"></p>
                     </div>
                     <div class="text-right">
-                      <p class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Identity Match</p>
-                      <p class="font-bold text-emerald-600">98.4% (Verified)</p>
+                      <p class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">AI Face Match</p>
+                      <p id="res-match-status" class="font-bold"></p>
                     </div>
                   </div>
   
-                  <div class="border-b border-emerald-100 pb-3">
+                  <div class="border-b border-slate-200 pb-3">
                       <p class="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">Exact Age (As of Today)</p>
                       <div class="flex gap-2 w-full">
-                         <div class="bg-white rounded p-1 flex-1 text-center shadow-sm border border-emerald-100">
-                            <span id="res-years" class="block text-lg font-black text-emerald-700"></span>
+                         <div class="bg-white rounded p-1 flex-1 text-center shadow-sm border border-slate-200">
+                            <span id="res-years" class="block text-lg font-black text-slate-700"></span>
                             <span class="text-[9px] text-slate-500 font-bold uppercase">Years</span>
                          </div>
-                         <div class="bg-white rounded p-1 flex-1 text-center shadow-sm border border-emerald-100">
-                            <span id="res-months" class="block text-lg font-black text-emerald-700"></span>
+                         <div class="bg-white rounded p-1 flex-1 text-center shadow-sm border border-slate-200">
+                            <span id="res-months" class="block text-lg font-black text-slate-700"></span>
                             <span class="text-[9px] text-slate-500 font-bold uppercase">Months</span>
                          </div>
-                         <div class="bg-white rounded p-1 flex-1 text-center shadow-sm border border-emerald-100">
-                            <span id="res-days" class="block text-lg font-black text-emerald-700"></span>
+                         <div class="bg-white rounded p-1 flex-1 text-center shadow-sm border border-slate-200">
+                            <span id="res-days" class="block text-lg font-black text-slate-700"></span>
                             <span class="text-[9px] text-slate-500 font-bold uppercase">Days</span>
                          </div>
                       </div>
@@ -207,50 +202,179 @@
         </div>
     </div>
 
+    <!-- Hidden Canvases for AI Processing -->
+    <canvas id="ref-canvas" class="hidden"></canvas>
+    <canvas id="selfie-canvas" class="hidden"></canvas>
+
     <script>
-        // Initialize Icons
         lucide.createIcons();
 
         // App State
-        const mockData = {
-            name: "Rahul Sharma",
-            dob: "15-08-2004", // DD-MM-YYYY
-            address: "S/O: Anil Sharma, H.No 42, Sector 14, Rohini, North West Delhi, New Delhi, Delhi, 110085"
-        };
+        let extractedData = { name: "Unknown", dob: "01-01-2000", address: "Not found" };
         let videoStream = null;
+        let html5QrCode = null;
+        let aiModelsLoaded = false;
+        
+        // AI Threshold (Lower means stricter match. 0.6 is industry standard)
+        const FACE_MATCH_THRESHOLD = 0.55; 
+
+        // 1. INITIALIZE REAL AI MODELS
+        async function loadAIModels() {
+            try {
+                // Using hosted models from face-api.js creator
+                const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
+                await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL);
+                await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+                await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+                
+                aiModelsLoaded = true;
+                showStep('scan');
+            } catch (error) {
+                console.error("AI Load Error:", error);
+                alert("Failed to load AI models. Ensure you have an internet connection for the first run.");
+            }
+        }
+        
+        // Start loading on boot
+        window.onload = loadAIModels;
 
         function showStep(stepId) {
             document.querySelectorAll('.step-container').forEach(el => el.classList.remove('active'));
             document.getElementById('step-' + stepId).classList.add('active');
         }
 
-        function simulateScan() {
-            // Show loading inside scan button in a real app, here we jump to collected
-            setTimeout(() => {
-                showStep('collected');
-            }, 800);
-        }
-
-        function goToSelfie() {
-            showStep('selfie');
-            startCamera();
-        }
-
-        function startCamera() {
-            const video = document.getElementById('webcam');
-            const errorDiv = document.getElementById('camera-error');
+        // 2. REAL QR PARSER
+        function startScanner() {
+            document.getElementById('scan-ui-elements').classList.add('hidden');
+            document.getElementById('reader').classList.remove('hidden');
             
-            navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })
+            const scanBtn = document.getElementById('scan-btn');
+            scanBtn.innerHTML = `<i data-lucide="loader-2" class="w-5 h-5 animate-spin"></i> Starting Camera...`;
+            scanBtn.disabled = true;
+            lucide.createIcons();
+
+            html5QrCode = new Html5Qrcode("reader");
+            const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+
+            html5QrCode.start({ facingMode: "environment" }, config, 
+                (decodedText) => {
+                    html5QrCode.stop().then(() => {
+                        resetScannerUI();
+                        parseAadhaarData(decodedText);
+                    });
+                },
+                (errorMessage) => { /* Ignore constant read errors */ }
+            ).then(() => {
+                scanBtn.innerHTML = `<i data-lucide="camera" class="w-5 h-5"></i> Scanning... Point at QR`;
+                lucide.createIcons();
+            }).catch((err) => {
+                alert("Camera error. Simulating scan for testing.");
+                resetScannerUI();
+                parseAadhaarData('<?xml version="1.0" encoding="UTF-8"?> <PrintLetterBarcodeData uid="XXXX" name="Rahul Sharma" gender="M" dob="15-08-2004" co="S/O: Anil Sharma" dist="North West Delhi" state="Delhi" pc="110085" />');
+            });
+        }
+
+        function parseAadhaarData(qrText) {
+            // Attempt to parse standard Aadhaar XML
+            try {
+                let nameMatch = qrText.match(/name="([^"]+)"/i);
+                let dobMatch = qrText.match(/dob="([^"]+)"/i) || qrText.match(/yob="([^"]+)"/i);
+                let coMatch = qrText.match(/co="([^"]+)"/i);
+                let distMatch = qrText.match(/dist="([^"]+)"/i);
+                let stateMatch = qrText.match(/state="([^"]+)"/i);
+                
+                if(nameMatch) extractedData.name = nameMatch[1];
+                if(dobMatch) {
+                    let d = dobMatch[1];
+                    // Handle YOB only cases
+                    extractedData.dob = d.length === 4 ? `01-01-${d}` : d; 
+                }
+                
+                let addr = [];
+                if(coMatch) addr.push(coMatch[1]);
+                if(distMatch) addr.push(distMatch[1]);
+                if(stateMatch) addr.push(stateMatch[1]);
+                if(addr.length > 0) extractedData.address = addr.join(", ");
+                
+            } catch(e) {
+                console.log("Not standard XML, mapping raw text");
+            }
+
+            goToIDReference();
+        }
+
+        function resetScannerUI() {
+            document.getElementById('scan-ui-elements').classList.remove('hidden');
+            document.getElementById('reader').classList.add('hidden');
+            const scanBtn = document.getElementById('scan-btn');
+            scanBtn.disabled = false;
+            scanBtn.innerHTML = `<i data-lucide="scan-line" class="w-5 h-5"></i> Open Camera to Scan`;
+            lucide.createIcons();
+        }
+
+        // 3. CAPTURE ID PHOTO (Fallback for Web offline limitations)
+        function goToIDReference() {
+            showStep('reference');
+            startCamera('ref-webcam', 'environment'); // Use back camera for taking pic of ID
+        }
+
+        function startCamera(videoId, facing) {
+            const video = document.getElementById(videoId);
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: facing } })
                 .then(stream => {
                     videoStream = stream;
                     video.srcObject = stream;
-                    errorDiv.classList.add('hidden');
                 })
                 .catch(err => {
                     console.error("Camera error:", err);
-                    errorDiv.classList.remove('hidden');
-                    errorDiv.classList.add('flex');
+                    alert("Camera blocked. App cannot proceed without camera access.");
                 });
+        }
+
+        function captureReferencePhoto() {
+            const video = document.getElementById('ref-webcam');
+            const canvas = document.getElementById('ref-canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+            
+            // Show preview, hide video
+            const img = document.getElementById('ref-image-preview');
+            img.src = canvas.toDataURL('image/jpeg');
+            video.classList.add('hidden');
+            img.classList.remove('hidden');
+            
+            document.getElementById('ref-capture-btn').classList.add('hidden');
+            document.getElementById('ref-continue-btn').classList.remove('hidden');
+            document.getElementById('ref-continue-btn').classList.add('flex');
+            stopCamera();
+        }
+
+        // 4. CAPTURE LIVE SELFIE
+        function goToSelfie() {
+            showStep('selfie');
+            startCamera('webcam', 'user'); // Use front camera for selfie
+        }
+
+        function captureSelfieAndProcess() {
+            const video = document.getElementById('webcam');
+            const canvas = document.getElementById('selfie-canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            // Handle mirror flip for processing
+            const ctx = canvas.getContext('2d');
+            ctx.translate(canvas.width, 0);
+            ctx.scale(-1, 1);
+            ctx.drawImage(video, 0, 0);
+            
+            // Show preview, hide video
+            const img = document.getElementById('selfie-image-preview');
+            img.src = canvas.toDataURL('image/jpeg');
+            video.classList.add('hidden');
+            img.classList.remove('hidden');
+            
+            stopCamera();
+            runAIEngine();
         }
 
         function stopCamera() {
@@ -260,10 +384,23 @@
             }
         }
 
+        // 5. EXACT AGE CALCULATION
         function calculateExactAge(dobString) {
-            const [day, month, year] = dobString.split('-');
+            // Handle various formats (DD-MM-YYYY, DD/MM/YYYY, or just YYYY)
+            let day = 1, month = 1, year = 2000;
+            if(dobString.includes('-') || dobString.includes('/')) {
+                const parts = dobString.split(/[-/]/);
+                if(parts.length === 3) {
+                    day = parseInt(parts[0]);
+                    month = parseInt(parts[1]);
+                    year = parseInt(parts[2]);
+                }
+            } else if (dobString.length === 4) {
+                year = parseInt(dobString);
+            }
+
             const birthDate = new Date(`${year}-${month}-${day}`);
-            const today = new Date(); // Gets the exact current date
+            const today = new Date(); // Exact current date
             
             let years = today.getFullYear() - birthDate.getFullYear();
             let months = today.getMonth() - birthDate.getMonth();
@@ -274,67 +411,114 @@
                 const previousMonth = new Date(today.getFullYear(), today.getMonth(), 0);
                 days += previousMonth.getDate();
             }
-
             if (months < 0) {
                 years--;
                 months += 12;
             }
-            
             return { years, months, days };
         }
 
-        function startProcessing() {
-            stopCamera();
+        // 6. REAL AI PROCESSING ENGINE
+        async function runAIEngine() {
             showStep('processing');
             
             let progress = 0;
             const progressRing = document.getElementById('progress-ring');
             const progressText = document.getElementById('progress-text');
-            const circumference = 2 * Math.PI * 45; // 283
+            const circumference = 2 * Math.PI * 45;
 
-            const interval = setInterval(() => {
-                progress += 10;
-                
-                // Update ring and text
+            // UI Animation interval
+            const uiInterval = setInterval(() => {
+                progress += 5;
+                if(progress > 90) progress = 90; // Hold at 90 until AI is done
                 const offset = circumference - (progress / 100) * circumference;
                 progressRing.style.strokeDashoffset = offset;
                 progressText.innerText = progress + '%';
 
-                // Update checklist
-                if(progress === 30) {
-                    document.getElementById('chk-1').classList.replace('text-slate-300', 'text-emerald-500');
-                    document.getElementById('txt-1').classList.add('text-slate-800');
-                }
-                if(progress === 60) {
-                    document.getElementById('chk-2').classList.replace('text-slate-300', 'text-emerald-500');
-                    document.getElementById('txt-2').classList.add('text-slate-800');
-                }
-                if(progress === 90) {
-                    document.getElementById('chk-3').classList.replace('text-slate-300', 'text-emerald-500');
-                    document.getElementById('txt-3').classList.add('text-slate-800');
+                if(progress === 30) { document.getElementById('chk-1').classList.replace('text-slate-300', 'text-emerald-500'); document.getElementById('txt-1').classList.add('text-slate-800'); }
+                if(progress === 60) { document.getElementById('chk-2').classList.replace('text-slate-300', 'text-emerald-500'); document.getElementById('txt-2').classList.add('text-slate-800'); }
+            }, 200);
+
+            try {
+                // Get the images from the hidden canvases
+                const refImg = document.getElementById('ref-image-preview');
+                const selfieImg = document.getElementById('selfie-image-preview');
+
+                // Detect faces and extract descriptors using neural network
+                const refDetection = await faceapi.detectSingleFace(refImg).withFaceLandmarks().withFaceDescriptor();
+                const selfieDetection = await faceapi.detectSingleFace(selfieImg).withFaceLandmarks().withFaceDescriptor();
+
+                let isMatch = false;
+                let matchScore = 0;
+
+                if (refDetection && selfieDetection) {
+                    // Calculate Euclidean distance between the two faces
+                    const distance = faceapi.euclideanDistance(refDetection.descriptor, selfieDetection.descriptor);
+                    
+                    // Convert distance to a percentage score for UI (0 distance = 100% match)
+                    isMatch = distance < FACE_MATCH_THRESHOLD;
+                    matchScore = Math.max(0, 100 - (distance * 100)).toFixed(1);
+                } else {
+                    // Could not detect a face in one of the images
+                    console.log("Face not detected in one or both images");
+                    matchScore = 0;
                 }
 
-                if (progress >= 100) {
-                    clearInterval(interval);
-                    setTimeout(showResult, 500);
-                }
-            }, 300);
+                // Finalize UI
+                clearInterval(uiInterval);
+                progressRing.style.strokeDashoffset = 0;
+                progressText.innerText = '100%';
+                document.getElementById('chk-3').classList.replace('text-slate-300', 'text-emerald-500'); 
+                document.getElementById('txt-3').classList.add('text-slate-800');
+
+                setTimeout(() => showResult(isMatch, matchScore), 800);
+
+            } catch (error) {
+                console.error("AI Processing Error:", error);
+                clearInterval(uiInterval);
+                alert("An error occurred during AI processing. Showing mock failure.");
+                showResult(false, 0);
+            }
         }
 
-        function showResult() {
-            const exactAge = calculateExactAge(mockData.dob);
+        // 7. SHOW RESULTS
+        function showResult(isMatch, matchScore) {
+            const exactAge = calculateExactAge(extractedData.dob);
             
-            document.getElementById('res-name').innerText = mockData.name;
+            const statusIcon = document.getElementById('result-status-icon');
+            const statusTitle = document.getElementById('result-status-title');
+            const statusDesc = document.getElementById('result-status-desc');
+            const matchStatusTxt = document.getElementById('res-match-status');
+
+            if (isMatch) {
+                statusIcon.innerHTML = `<i data-lucide="check-circle-2" class="w-16 h-16 text-emerald-600"></i>`;
+                statusTitle.innerText = "Verification Complete";
+                statusTitle.className = "text-2xl font-black text-emerald-700 mb-1";
+                statusDesc.innerText = "Player identity confirmed securely.";
+                matchStatusTxt.innerText = `${matchScore}% (Verified)`;
+                matchStatusTxt.className = "font-bold text-emerald-600";
+            } else {
+                statusIcon.innerHTML = `<i data-lucide="user-x" class="w-16 h-16 text-rose-600"></i>`;
+                statusTitle.innerText = "Photo Not Matching";
+                statusTitle.className = "text-2xl font-black text-rose-700 mb-1";
+                statusDesc.innerText = "Selfie does not match the ID photo provided.";
+                matchStatusTxt.innerText = matchScore > 0 ? `${matchScore}% (Failed)` : `No Face Detected`;
+                matchStatusTxt.className = "font-bold text-rose-600";
+            }
+
+            // Populate extracted metadata
+            document.getElementById('res-name').innerText = extractedData.name;
             document.getElementById('res-years').innerText = exactAge.years;
             document.getElementById('res-months').innerText = exactAge.months;
             document.getElementById('res-days').innerText = exactAge.days;
-            document.getElementById('res-address').innerText = mockData.address;
+            document.getElementById('res-address').innerText = extractedData.address;
 
             showStep('result');
+            lucide.createIcons();
         }
 
         function resetApp() {
-            // Reset UI states
+            // Reset UI states and hidden elements
             document.getElementById('progress-ring').style.strokeDashoffset = 283;
             document.getElementById('progress-text').innerText = '0%';
             
@@ -342,6 +526,17 @@
                 document.getElementById('chk-'+i).classList.replace('text-emerald-500', 'text-slate-300');
                 document.getElementById('txt-'+i).classList.remove('text-slate-800');
             });
+
+            document.getElementById('ref-image-preview').classList.add('hidden');
+            document.getElementById('ref-webcam').classList.remove('hidden');
+            document.getElementById('ref-capture-btn').classList.remove('hidden');
+            document.getElementById('ref-continue-btn').classList.add('hidden');
+            document.getElementById('ref-continue-btn').classList.remove('flex');
+
+            document.getElementById('selfie-image-preview').classList.add('hidden');
+            document.getElementById('webcam').classList.remove('hidden');
+
+            extractedData = { name: "Unknown", dob: "01-01-2000", address: "Not found" };
 
             showStep('scan');
         }
