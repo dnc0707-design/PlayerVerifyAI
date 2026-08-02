@@ -71,16 +71,52 @@
                   <p class="text-slate-500 text-sm px-4">Scan physical card or e-Aadhaar.</p>
                 </div>
                 
-                <div id="scan-ui-elements" class="relative w-64 h-64 border-4 border-dashed border-blue-400 rounded-3xl flex items-center justify-center bg-blue-50 mb-12 overflow-hidden group">
+                <div id="scan-ui-elements" class="relative w-64 h-64 border-4 border-dashed border-blue-400 rounded-3xl flex items-center justify-center bg-blue-50 mb-8 overflow-hidden group">
                   <i data-lucide="qr-code" class="w-24 h-24 text-blue-300"></i>
                   <div class="absolute top-0 left-0 w-full h-1 bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.8)] animate-scan"></div>
                 </div>
 
                 <div id="reader" class="w-full max-w-sm hidden mb-6 rounded-2xl overflow-hidden border-4 border-slate-200 bg-black"></div>
   
-                <button id="scan-btn" onclick="startScanner()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition-colors shadow-lg flex items-center justify-center gap-2 text-lg">
+                <button id="scan-btn" onclick="startScanner()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition-colors shadow-lg flex items-center justify-center gap-2 text-lg mb-3">
                   <i data-lucide="scan-line" class="w-5 h-5"></i>
                   Open Camera to Scan
+                </button>
+                
+                <button onclick="showStep('manual')" class="w-full bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-4 rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2">
+                  <i data-lucide="keyboard" class="w-5 h-5"></i>
+                  QR Failing? Enter Manually
+                </button>
+            </div>
+
+            <!-- STEP 1.5: MANUAL ENTRY FALLBACK -->
+            <div id="step-manual" class="step-container flex-1 flex-col justify-center">
+                <div class="text-center mb-8">
+                  <h2 class="text-2xl font-bold mb-2">Manual Entry</h2>
+                  <p class="text-slate-500 text-sm px-4">Enter details exactly as they appear on the physical Aadhaar card.</p>
+                </div>
+                
+                <div class="space-y-4 mb-8">
+                    <div>
+                        <label class="block text-sm font-bold text-slate-700 mb-1">Full Name</label>
+                        <input type="text" id="manual-name" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g. Rahul Sharma">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-slate-700 mb-1">Date of Birth</label>
+                        <input type="date" id="manual-dob" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-slate-700 mb-1">City/District (Optional)</label>
+                        <input type="text" id="manual-address" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g. New Delhi">
+                    </div>
+                </div>
+
+                <button onclick="submitManualData()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition-colors shadow-lg flex items-center justify-center gap-2 text-lg mb-3">
+                  <i data-lucide="arrow-right" class="w-5 h-5"></i>
+                  Proceed to ID Photo
+                </button>
+                <button onclick="showStep('scan')" class="w-full bg-transparent text-slate-500 font-bold py-2 rounded-xl transition-colors text-sm">
+                  Cancel
                 </button>
             </div>
 
@@ -262,6 +298,12 @@
         function showStep(stepId) {
             document.querySelectorAll('.step-container').forEach(el => el.classList.remove('active'));
             document.getElementById('step-' + stepId).classList.add('active');
+            
+            // Auto-focus first input if manual step
+            if(stepId === 'manual') {
+                if(html5QrCode && html5QrCode.isScanning) html5QrCode.stop().then(resetScannerUI);
+                setTimeout(() => document.getElementById('manual-name').focus(), 100);
+            }
         }
 
         // 2. REAL QR PARSER
@@ -275,9 +317,24 @@
             lucide.createIcons();
 
             html5QrCode = new Html5Qrcode("reader");
-            const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+            
+            // Force high resolution to help read dense Aadhaar Secure QRs
+            const config = { 
+                fps: 10, 
+                qrbox: { width: 250, height: 250 },
+                aspectRatio: 1.0,
+                disableFlip: false
+            };
+            
+            // Request HD video constraints
+            const videoConstraints = {
+                facingMode: "environment",
+                width: { min: 640, ideal: 1920, max: 3840 },
+                height: { min: 480, ideal: 1080, max: 2160 },
+                advanced: [{ focusMode: "continuous" }]
+            };
 
-            html5QrCode.start({ facingMode: "environment" }, config, 
+            html5QrCode.start(videoConstraints, config, 
                 (decodedText) => {
                     html5QrCode.stop().then(() => {
                         resetScannerUI();
@@ -289,10 +346,40 @@
                 scanBtn.innerHTML = `<i data-lucide="camera" class="w-5 h-5"></i> Scanning... Point at QR`;
                 lucide.createIcons();
             }).catch((err) => {
-                alert("Camera error. Simulating scan for testing.");
+                console.error(err);
+                alert("Camera error or permission denied. Please use Manual Entry.");
                 resetScannerUI();
-                parseAadhaarData('<?xml version="1.0" encoding="UTF-8"?> <PrintLetterBarcodeData uid="XXXX" name="Rahul Sharma" gender="M" dob="15-08-2004" co="S/O: Anil Sharma" dist="North West Delhi" state="Delhi" pc="110085" />');
             });
+        }
+
+        function submitManualData() {
+            const name = document.getElementById('manual-name').value.trim();
+            let dob = document.getElementById('manual-dob').value; // Format: YYYY-MM-DD
+            const address = document.getElementById('manual-address').value.trim();
+
+            if(!name || !dob) {
+                alert("Please enter at least Name and Date of Birth.");
+                return;
+            }
+
+            // Convert YYYY-MM-DD from date picker to DD-MM-YYYY for calculation logic
+            const parts = dob.split('-');
+            if(parts.length === 3) {
+                dob = `${parts[2]}-${parts[1]}-${parts[0]}`;
+            }
+
+            extractedData = {
+                name: name,
+                dob: dob,
+                address: address || "Manually Entered"
+            };
+
+            // Clear form
+            document.getElementById('manual-name').value = '';
+            document.getElementById('manual-dob').value = '';
+            document.getElementById('manual-address').value = '';
+
+            goToIDReference();
         }
 
         function parseAadhaarData(qrText) {
@@ -563,11 +650,9 @@
             });
 
             document.getElementById('ref-image-preview').classList.add('hidden');
+            document.getElementById('back-image-preview').classList.add('hidden');
             document.getElementById('ref-webcam').classList.remove('hidden');
-            document.getElementById('ref-capture-btn').classList.remove('hidden');
-            document.getElementById('ref-continue-btn').classList.add('hidden');
-            document.getElementById('ref-continue-btn').classList.remove('flex');
-
+            
             document.getElementById('selfie-image-preview').classList.add('hidden');
             document.getElementById('webcam').classList.remove('hidden');
 
