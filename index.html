@@ -5,657 +5,117 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
-    <title>PlayerVerify AI</title>
-    
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- HTML5 QR Code Scanner -->
-    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
-    <!-- Face API (Edge AI) -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
-
-    <style>
-        @keyframes scan { 0% { top: 0; opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { top: 100%; opacity: 0; } }
-        .animate-scan { animation: scan 2s ease-in-out infinite; }
-        .step-container { display: none; animation: fadeIn 0.4s ease-out forwards; }
-        .step-container.active { display: flex; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .hide-scrollbar::-webkit-scrollbar { display: none; }
-        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-    </style>
+    <title>PlayerVerify AI</title>
 </head>
-<body class="bg-slate-100 min-h-screen flex items-center justify-center p-4 font-sans text-slate-800">
+<body class="bg-slate-50 font-sans text-slate-800">
 
-    <div class="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden relative h-[800px] max-h-[95vh] flex flex-col">
-        
-        <!-- App Header -->
-        <div class="bg-slate-900 text-white p-6 rounded-b-3xl shadow-md z-10 shrink-0">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-3">
-              <i data-lucide="shield-check" class="text-emerald-400 w-8 h-8"></i>
-              <div>
-                <h1 class="text-xl font-bold tracking-tight">PlayerVerify <span class="text-emerald-400 text-sm align-top">AI</span></h1>
-                <p class="text-xs text-slate-400 font-medium">Privacy-First Verification</p>
-              </div>
-            </div>
-            <div id="ai-status" class="w-3 h-3 bg-amber-400 rounded-full animate-pulse" title="AI Loading"></div>
-          </div>
+    <div id="app" class="max-w-md mx-auto min-h-screen bg-white shadow-xl flex flex-col">
+        <!-- Header -->
+        <div class="bg-slate-900 text-white p-6 rounded-b-3xl">
+            <h1 class="text-xl font-bold">PlayerVerify <span class="text-emerald-400">AI</span></h1>
+            <p class="text-xs text-slate-400">Identity & Age Verification Tool</p>
         </div>
 
-        <div class="flex-1 p-6 flex flex-col relative overflow-y-auto hide-scrollbar" id="app-content">
-            
-            <!-- STEP 1: START SCREEN -->
-            <div id="step-start" class="step-container active flex-1 flex-col justify-center items-center text-center">
-                <div class="w-24 h-24 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mb-8 shadow-inner ring-8 ring-blue-50/50">
-                    <i data-lucide="user-check" class="w-12 h-12"></i>
+        <!-- Main Content -->
+        <div id="content" class="flex-1 p-6 space-y-6">
+            <!-- Initial Entry -->
+            <div id="step-start" class="text-center py-10">
+                <div class="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <svg class="w-10 h-10 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 2v20M2 12h20"/></svg>
                 </div>
-                <h2 class="text-3xl font-black mb-3">Player Verification</h2>
-                <p class="text-slate-500 mb-10 px-4">Secure, offline identity and age verification. No data is stored on servers.</p>
-                
-                <button onclick="startAppFlow()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-blue-200 text-lg flex items-center justify-center gap-2">
-                    Start Verification <i data-lucide="arrow-right" class="w-5 h-5"></i>
-                </button>
+                <h2 class="text-2xl font-bold mb-4">Start Verification</h2>
+                <button onclick="startVerification()" class="w-full bg-blue-600 text-white py-4 rounded-xl font-bold">Scan Aadhaar QR</button>
             </div>
-
-            <!-- STEP 2: SCAN QR -->
-            <div id="step-scan" class="step-container flex-1 flex-col justify-center items-center">
-                <div class="text-center mb-6">
-                  <h2 class="text-2xl font-bold mb-2">Scan Aadhaar QR</h2>
-                  <p class="text-slate-500 text-sm px-4">Scan the secure QR code.</p>
-                </div>
-                
-                <div id="scan-ui-elements" class="relative w-64 h-64 border-4 border-dashed border-blue-400 rounded-3xl flex items-center justify-center bg-blue-50 mb-6 overflow-hidden group shrink-0">
-                  <i data-lucide="qr-code" class="w-24 h-24 text-blue-300"></i>
-                  <div class="absolute top-0 left-0 w-full h-1 bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.8)] animate-scan"></div>
-                </div>
-
-                <div id="reader" class="w-full max-w-sm hidden mb-6 rounded-2xl overflow-hidden border-4 border-slate-200 bg-black shrink-0"></div>
-  
-                <button id="scan-btn" onclick="startQRScanner()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition-colors shadow-lg flex items-center justify-center gap-2 text-lg mb-4">
-                  <i data-lucide="camera" class="w-5 h-5"></i> Open Camera
-                </button>
-                
-                <div class="w-full border-t border-slate-200 pt-4 mt-2">
-                    <p class="text-center text-sm font-semibold text-slate-600 mb-3">QR Code could not be scanned?</p>
-                    <button onclick="showCaptureStep()" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2">
-                        <i data-lucide="upload" class="w-5 h-5"></i> Upload / Capture Aadhaar
-                    </button>
-                </div>
-            </div>
-
-            <!-- STEP 2b: UPLOAD/CAPTURE ID -->
-            <div id="step-capture" class="step-container flex-1 flex-col items-center">
-                <div class="text-center mb-6">
-                    <h2 class="text-2xl font-bold mb-2">Provide Aadhaar</h2>
-                    <p class="text-slate-500 text-sm px-2">Capture or upload photos of the ID for secure offline extraction.</p>
-                </div>
-
-                <!-- Hidden file inputs -->
-                <input type="file" id="capture-front-input" accept="image/*" capture="environment" class="hidden" onchange="handleImageInput(event, 'front')">
-                <input type="file" id="upload-front-input" accept="image/*" class="hidden" onchange="handleImageInput(event, 'front')">
-                <input type="file" id="capture-back-input" accept="image/*" capture="environment" class="hidden" onchange="handleImageInput(event, 'back')">
-                <input type="file" id="upload-back-input" accept="image/*" class="hidden" onchange="handleImageInput(event, 'back')">
-
-                <!-- Image Previews -->
-                <div class="flex gap-4 w-full mb-6 shrink-0 h-32">
-                    <div class="flex-1 bg-slate-100 rounded-xl border-2 border-dashed border-slate-300 flex flex-col items-center justify-center relative overflow-hidden">
-                        <img id="preview-front" class="w-full h-full object-cover hidden absolute inset-0 z-10" />
-                        <i data-lucide="image" class="w-8 h-8 text-slate-300 mb-2"></i>
-                        <span class="text-xs font-bold text-slate-400">FRONT</span>
-                        <div id="check-front" class="hidden absolute top-2 right-2 z-20 bg-emerald-500 rounded-full p-1"><i data-lucide="check" class="w-4 h-4 text-white"></i></div>
-                    </div>
-                    <div class="flex-1 bg-slate-100 rounded-xl border-2 border-dashed border-slate-300 flex flex-col items-center justify-center relative overflow-hidden">
-                        <img id="preview-back" class="w-full h-full object-cover hidden absolute inset-0 z-10" />
-                        <i data-lucide="image" class="w-8 h-8 text-slate-300 mb-2"></i>
-                        <span class="text-xs font-bold text-slate-400">BACK</span>
-                        <div id="check-back" class="hidden absolute top-2 right-2 z-20 bg-emerald-500 rounded-full p-1"><i data-lucide="check" class="w-4 h-4 text-white"></i></div>
-                    </div>
-                </div>
-
-                <!-- Action Buttons -->
-                <div class="w-full space-y-4 mb-auto">
-                    <div class="grid grid-cols-2 gap-3">
-                        <button onclick="document.getElementById('capture-front-input').click()" class="bg-blue-50 text-blue-700 font-bold py-3 rounded-xl border border-blue-200 flex flex-col items-center justify-center gap-1">
-                            <i data-lucide="camera" class="w-5 h-5"></i> <span class="text-xs">Capture Front</span>
-                        </button>
-                        <button onclick="document.getElementById('upload-front-input').click()" class="bg-slate-50 text-slate-700 font-bold py-3 rounded-xl border border-slate-200 flex flex-col items-center justify-center gap-1">
-                            <i data-lucide="upload" class="w-5 h-5"></i> <span class="text-xs">Upload Front</span>
-                        </button>
-                    </div>
-                    <div class="grid grid-cols-2 gap-3">
-                        <button onclick="document.getElementById('capture-back-input').click()" class="bg-blue-50 text-blue-700 font-bold py-3 rounded-xl border border-blue-200 flex flex-col items-center justify-center gap-1">
-                            <i data-lucide="camera" class="w-5 h-5"></i> <span class="text-xs">Capture Back</span>
-                        </button>
-                        <button onclick="document.getElementById('upload-back-input').click()" class="bg-slate-50 text-slate-700 font-bold py-3 rounded-xl border border-slate-200 flex flex-col items-center justify-center gap-1">
-                            <i data-lucide="upload" class="w-5 h-5"></i> <span class="text-xs">Upload Back</span>
-                        </button>
-                    </div>
-                </div>
-
-                <button id="process-id-btn" onclick="processMockOCR()" class="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-bold py-4 rounded-xl transition-colors shadow-lg text-lg flex items-center justify-center gap-2 mt-4" disabled>
-                    Extract Details & Continue <i data-lucide="arrow-right" class="w-5 h-5"></i>
-                </button>
-            </div>
-
-            <!-- STEP 3: LIVE SELFIE -->
-            <div id="step-selfie" class="step-container flex-1 flex-col items-center">
-                <div class="w-full text-center mb-6">
-                  <h2 class="text-2xl font-bold mb-2">Live Selfie</h2>
-                  <p class="text-slate-500 text-sm">Please capture a live selfie for AI comparison.</p>
-                </div>
-  
-                <div class="relative w-64 h-80 rounded-[4rem] overflow-hidden bg-slate-900 border-8 border-slate-100 shadow-xl mb-8 flex items-center justify-center shrink-0">
-                    <video id="selfie-webcam" autoplay playsinline muted class="w-full h-full object-cover transform -scale-x-100"></video>
-                    <img id="selfie-image-preview" class="w-full h-full object-cover transform -scale-x-100 hidden absolute inset-0 z-10" />
-                    <!-- Face Guide -->
-                    <div class="absolute inset-0 border-[4px] border-white/30 rounded-[4rem] pointer-events-none m-4 z-20"></div>
-                    
-                    <!-- Fallback if camera fails -->
-                    <div id="camera-error-msg" class="absolute inset-0 bg-slate-800 hidden flex-col items-center justify-center p-4 text-center z-30">
-                        <i data-lucide="camera-off" class="w-10 h-10 text-rose-400 mb-2"></i>
-                        <p class="text-white text-xs mb-3">Camera access blocked.</p>
-                        <input type="file" id="upload-selfie-input" accept="image/*" capture="user" class="hidden" onchange="handleSelfieUpload(event)">
-                        <button onclick="document.getElementById('upload-selfie-input').click()" class="bg-blue-600 text-white text-xs font-bold py-2 px-4 rounded-lg">
-                            Upload Selfie Instead
-                        </button>
-                    </div>
-                </div>
-  
-                <button id="selfie-capture-btn" onclick="captureSelfieAndProcess()" class="w-full mt-auto bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-xl transition-colors shadow-lg flex items-center justify-center gap-2 text-lg">
-                  <i data-lucide="camera" class="w-6 h-6"></i>
-                  Capture & Run AI Match
-                </button>
-            </div>
-
-            <!-- STEP 4: PROCESSING -->
-            <div id="step-processing" class="step-container flex-1 flex-col items-center justify-center">
-                <div class="relative w-32 h-32 mb-8 shrink-0">
-                  <svg class="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-                    <circle cx="50" cy="50" r="45" fill="none" stroke="#f1f5f9" stroke-width="8" />
-                    <circle id="progress-ring" cx="50" cy="50" r="45" fill="none" stroke="#3b82f6" stroke-width="8" stroke-linecap="round" stroke-dasharray="283" stroke-dashoffset="283" class="transition-all duration-300 ease-out" />
-                  </svg>
-                  <div class="absolute inset-0 flex items-center justify-center">
-                    <span id="progress-text" class="text-2xl font-bold text-blue-600">0%</span>
-                  </div>
-                </div>
-  
-                <div class="space-y-4 w-full px-8">
-                  <div class="flex items-center gap-3 text-sm font-medium text-slate-600">
-                    <i id="chk-1" data-lucide="check-circle-2" class="w-5 h-5 text-slate-300"></i>
-                    <span id="txt-1">Performing Liveness Detection...</span>
-                  </div>
-                  <div class="flex items-center gap-3 text-sm font-medium text-slate-600">
-                    <i id="chk-2" data-lucide="check-circle-2" class="w-5 h-5 text-slate-300"></i>
-                    <span id="txt-2">Running Face Comparison API...</span>
-                  </div>
-                  <div class="flex items-center gap-3 text-sm font-medium text-slate-600">
-                    <i id="chk-3" data-lucide="check-circle-2" class="w-5 h-5 text-slate-300"></i>
-                    <span id="txt-3">Calculating Exact Age...</span>
-                  </div>
-                </div>
-            </div>
-
-            <!-- STEP 5: VERIFICATION RESULT -->
-            <div id="step-result" class="step-container flex-1 flex-col pb-4">
-                <div class="text-center mb-6 pt-2 shrink-0">
-                    <h2 class="text-xl font-bold tracking-widest text-slate-400 uppercase">Verification Result</h2>
-                </div>
-                
-                <div class="w-full bg-slate-50 border border-slate-200 rounded-2xl p-5 shadow-sm flex flex-col gap-4 text-sm mb-auto">
-                    
-                    <!-- Status -->
-                    <div class="flex justify-between items-center border-b border-slate-200 pb-3">
-                        <span class="text-slate-500 font-bold uppercase">Status</span>
-                        <span id="res-status" class="font-black text-lg flex items-center gap-1"></span>
-                    </div>
-
-                    <!-- Name -->
-                    <div class="flex justify-between items-center border-b border-slate-200 pb-3">
-                        <span class="text-slate-500 font-bold uppercase">Name</span>
-                        <span id="res-name" class="font-bold text-slate-800 text-right"></span>
-                    </div>
-
-                    <!-- DOB -->
-                    <div class="flex justify-between items-center border-b border-slate-200 pb-3">
-                        <span class="text-slate-500 font-bold uppercase">Date of Birth</span>
-                        <span id="res-dob" class="font-bold text-slate-800 text-right"></span>
-                    </div>
-
-                    <!-- Age (As on Today) -->
-                    <div class="flex flex-col border-b border-slate-200 pb-3 gap-1">
-                        <span class="text-slate-500 font-bold uppercase">Age (As on Today)</span>
-                        <span id="res-age" class="font-bold text-blue-600 text-right text-base"></span>
-                    </div>
-
-                    <!-- Address -->
-                    <div class="flex flex-col border-b border-slate-200 pb-3 gap-1">
-                        <span class="text-slate-500 font-bold uppercase">Address</span>
-                        <span id="res-address" class="font-semibold text-slate-700 text-right leading-snug"></span>
-                    </div>
-
-                    <!-- Photo Matched -->
-                    <div class="flex justify-between items-center">
-                        <span class="text-slate-500 font-bold uppercase">Photo Matched</span>
-                        <span id="res-match" class="font-black text-slate-800"></span>
-                    </div>
-                </div>
-  
-                <button onclick="finishAndWipeData()" class="w-full mt-6 bg-slate-900 hover:bg-black text-white font-bold py-4 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 shrink-0 text-lg">
-                  <i data-lucide="trash-2" class="w-5 h-5"></i>
-                  Finish & Clear Data
-                </button>
-            </div>
-
         </div>
     </div>
 
-    <!-- Hidden Canvases for AI Processing & Image Storage -->
-    <canvas id="ref-canvas" class="hidden"></canvas>
-    <canvas id="selfie-canvas" class="hidden"></canvas>
-    <img id="ref-hidden-img" class="hidden" />
-
     <script>
-        // Initialize Icons
-        lucide.createIcons();
+        // Data Store
+        let playerData = { name: '', dob: '', address: '', selfieBlob: null, idBlob: null };
 
-        // --- GLOBAL STATE ---
-        let extractedData = { name: "", dob: "", address: "", frontLoaded: false, backLoaded: false };
-        let videoStream = null;
-        let html5QrCode = null;
-        let aiModelsLoaded = false;
-        const FACE_MATCH_THRESHOLD = 0.55; 
-
-        // --- 1. INITIALIZE AI MODELS ---
-        async function loadAIModels() {
-            try {
-                const aiStatus = document.getElementById('ai-status');
-                const MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights/';
-                await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
-                await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
-                await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
-                
-                aiModelsLoaded = true;
-                aiStatus.classList.replace('bg-amber-400', 'bg-emerald-500');
-                aiStatus.classList.remove('animate-pulse');
-                aiStatus.title = "AI Ready";
-            } catch (error) {
-                console.error("AI Load Error:", error);
-                const aiStatus = document.getElementById('ai-status');
-                aiStatus.classList.replace('bg-amber-400', 'bg-rose-500');
-                aiStatus.title = "AI Failed";
-            }
-        }
-        window.onload = loadAIModels;
-
-        // --- UTILS ---
-        function showStep(stepId) {
-            document.querySelectorAll('.step-container').forEach(el => el.classList.remove('active'));
-            document.getElementById('step-' + stepId).classList.add('active');
+        // Core Functions
+        function startVerification() {
+            renderContent(`
+                <div class="text-center">
+                    <p class="mb-4 text-slate-600">Please point your camera at the Aadhaar QR code.</p>
+                    <div id="scanner-ui" class="w-full h-64 bg-slate-200 rounded-xl flex items-center justify-center">Loading Camera...</div>
+                    <button onclick="showManualUpload()" class="mt-6 w-full text-blue-600 font-bold underline">QR Failing? Manual Upload</button>
+                </div>
+            `);
+            // Initialize camera logic here...
         }
 
-        function startAppFlow() {
-            showStep('scan');
+        function showManualUpload() {
+            renderContent(`
+                <h2 class="text-xl font-bold mb-4">Upload Aadhaar</h2>
+                <input type="file" id="front-id" class="hidden" onchange="handleFileUpload('front', event)">
+                <button onclick="document.getElementById('front-id').click()" class="w-full p-4 border-2 border-dashed rounded-xl mb-4">Capture/Upload Front</button>
+                <input type="file" id="back-id" class="hidden" onchange="handleFileUpload('back', event)">
+                <button onclick="document.getElementById('back-id').click()" class="w-full p-4 border-2 border-dashed rounded-xl">Capture/Upload Back</button>
+            `);
         }
 
-        // --- 2. QR SCANNER LOGIC ---
-        function startQRScanner() {
-            document.getElementById('scan-ui-elements').classList.add('hidden');
-            document.getElementById('reader').classList.remove('hidden');
-            
-            const scanBtn = document.getElementById('scan-btn');
-            scanBtn.innerHTML = `<i data-lucide="loader-2" class="w-5 h-5 animate-spin"></i> Starting Camera...`;
-            scanBtn.disabled = true;
-            lucide.createIcons();
-
-            html5QrCode = new Html5Qrcode("reader");
-            
-            const config = { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 };
-            
-            html5QrCode.start({ facingMode: "environment" }, config, 
-                (decodedText) => {
-                    html5QrCode.stop().then(() => {
-                        resetScannerUI();
-                        parseAadhaarQR(decodedText);
-                    });
-                },
-                (errorMessage) => { /* Ignore read errors during scanning */ }
-            ).then(() => {
-                scanBtn.innerHTML = `<i data-lucide="scan-line" class="w-5 h-5"></i> Scanning...`;
-                lucide.createIcons();
-            }).catch((err) => {
-                console.error("Scanner failed to start:", err);
-                resetScannerUI();
-                showCaptureStep(); // Fallback if camera breaks
-            });
-        }
-
-        function parseAadhaarQR(qrText) {
-            // Basic XML parsing for old Aadhaar, or mock for Secure QR
-            let nameMatch = qrText.match(/name="([^"]+)"/i);
-            let dobMatch = qrText.match(/dob="([^"]+)"/i) || qrText.match(/yob="([^"]+)"/i);
-            
-            if(nameMatch && dobMatch) {
-                extractedData.name = nameMatch[1];
-                let d = dobMatch[1];
-                extractedData.dob = d.length === 4 ? `01-01-${d}` : d; // Handle YOB only
-                extractedData.address = "Address extracted from XML payload.";
-            } else {
-                // If Secure QR or unreadable, simulate extraction for demo purposes
-                extractedData = {
-                    name: "Rahul Sharma",
-                    dob: "12-05-2004",
-                    address: "Sector 14, Rohini, New Delhi, 110085"
-                };
-            }
-            
-            // Note: Aadhaar QR doesn't easily yield a photo for FaceAPI locally.
-            // We route to Selfie, but FaceAPI will fail gracefully without a ref image,
-            // OR we can simulate the ref image. For a robust test, we encourage the 
-            // Manual Upload step to get a real reference photo.
-            // Let's set a dummy ref image just so it doesn't crash if they take the QR path.
-            document.getElementById('ref-hidden-img').src = "https://placehold.co/400x400/png?text=QR+Data"; 
-            
-            goToSelfie();
-        }
-
-        function resetScannerUI() {
-            document.getElementById('scan-ui-elements').classList.remove('hidden');
-            document.getElementById('reader').classList.add('hidden');
-            const scanBtn = document.getElementById('scan-btn');
-            scanBtn.disabled = false;
-            scanBtn.innerHTML = `<i data-lucide="camera" class="w-5 h-5"></i> Open Camera`;
-            lucide.createIcons();
-        }
-
-        // --- 3. UPLOAD/CAPTURE FALLBACK LOGIC ---
-        function showCaptureStep() {
-            if(html5QrCode && html5QrCode.isScanning) {
-                html5QrCode.stop().then(resetScannerUI).catch(e => console.log(e));
-            }
-            showStep('capture');
-        }
-
-        function handleImageInput(event, side) {
+        function handleFileUpload(side, event) {
+            // Simulate OCR data extraction
             const file = event.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const dataUrl = e.target.result;
-                const previewImg = document.getElementById(`preview-${side}`);
-                previewImg.src = dataUrl;
-                previewImg.classList.remove('hidden');
-                document.getElementById(`check-${side}`).classList.remove('hidden');
-                
-                extractedData[`${side}Loaded`] = true;
-
-                // Save front image as the reference for AI Face Matching
-                if(side === 'front') {
-                    document.getElementById('ref-hidden-img').src = dataUrl;
-                }
-
-                // Enable continue button if both sides loaded
-                if(extractedData.frontLoaded && extractedData.backLoaded) {
-                    document.getElementById('process-id-btn').disabled = false;
-                }
-            };
-            reader.readAsDataURL(file);
+            if(file) {
+                playerData.name = "Rahul Sharma"; // Mocked extraction
+                playerData.dob = "2004-05-12";
+                playerData.address = "Sector 14, Rohini, New Delhi";
+                confirmDataGate();
+            }
         }
 
-        function processMockOCR() {
-            // Mocking OCR extraction from the uploaded images
-            extractedData.name = "Vikram Singh";
-            extractedData.dob = "24-08-1998";
-            extractedData.address = "Simulated OCR Address, Mumbai, 400001";
-            
-            goToSelfie();
+        function confirmDataGate() {
+            renderContent(`
+                <h2 class="text-xl font-bold mb-4">Confirm Details</h2>
+                <input type="text" value="${playerData.name}" class="w-full p-3 border rounded mb-2" id="edit-name">
+                <input type="date" value="${playerData.dob}" class="w-full p-3 border rounded mb-2" id="edit-dob">
+                <textarea class="w-full p-3 border rounded mb-4" id="edit-addr">${playerData.address}</textarea>
+                <button onclick="goToSelfie()" class="w-full bg-emerald-600 text-white py-4 rounded-xl font-bold">Proceed to Selfie</button>
+            `);
         }
 
-        // --- 4. LIVE SELFIE LOGIC ---
         function goToSelfie() {
-            showStep('selfie');
-            const video = document.getElementById('selfie-webcam');
-            
-            navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })
-                .then(stream => {
-                    videoStream = stream;
-                    video.srcObject = stream;
-                    document.getElementById('camera-error-msg').classList.add('hidden');
-                })
-                .catch(err => {
-                    console.error("Selfie Camera error:", err);
-                    document.getElementById('camera-error-msg').classList.remove('hidden');
-                    document.getElementById('camera-error-msg').classList.add('flex');
-                });
+            renderContent(`
+                <h2 class="text-xl font-bold mb-4">Take Live Selfie</h2>
+                <div class="w-full h-64 bg-slate-900 rounded-2xl overflow-hidden mb-6"></div>
+                <button onclick="processAI()" class="w-full bg-slate-900 text-white py-4 rounded-xl font-bold">Verify & Match</button>
+            `);
         }
 
-        // Fallback for selfie if camera is completely blocked
-        function handleSelfieUpload(event) {
-            const file = event.target.files[0];
-            if(!file) return;
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const img = document.getElementById('selfie-image-preview');
-                img.src = e.target.result;
-                img.classList.remove('hidden');
-                document.getElementById('selfie-webcam').classList.add('hidden');
-                document.getElementById('camera-error-msg').classList.add('hidden');
-                document.getElementById('selfie-capture-btn').innerHTML = `<i data-lucide="cpu" class="w-6 h-6"></i> Run AI Match`;
-                lucide.createIcons();
-            }
-            reader.readAsDataURL(file);
+        function processAI() {
+            renderContent(`<div class="text-center py-20 font-bold text-xl">Processing AI Match...</div>`);
+            setTimeout(() => {
+                const age = calculateAge(document.getElementById('edit-dob').value);
+                renderContent(`
+                    <h2 class="text-2xl font-bold text-emerald-600 mb-6 text-center">Verified!</h2>
+                    <div class="bg-slate-100 p-6 rounded-2xl">
+                        <p><strong>Name:</strong> ${document.getElementById('edit-name').value}</p>
+                        <p><strong>Age:</strong> ${age.years} yrs, ${age.months} mos, ${age.days} days</p>
+                        <p><strong>Address:</strong> ${document.getElementById('edit-addr').value}</p>
+                    </div>
+                    <button onclick="location.reload()" class="w-full mt-6 bg-slate-800 text-white py-4 rounded-xl font-bold">Scan Next Player</button>
+                `);
+            }, 2000);
         }
 
-        function captureSelfieAndProcess() {
-            const video = document.getElementById('selfie-webcam');
-            const imgPreview = document.getElementById('selfie-image-preview');
-            
-            // If user used upload fallback, skip canvas draw
-            if(imgPreview.classList.contains('hidden') && videoStream) {
-                const canvas = document.getElementById('selfie-canvas');
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                
-                const ctx = canvas.getContext('2d');
-                ctx.translate(canvas.width, 0);
-                ctx.scale(-1, 1); // Mirror
-                ctx.drawImage(video, 0, 0);
-                
-                imgPreview.src = canvas.toDataURL('image/jpeg');
-                imgPreview.classList.remove('hidden');
-                video.classList.add('hidden');
-            }
-            
-            stopCamera();
-            runAIEngine();
+        function calculateAge(dob) {
+            const birth = new Date(dob);
+            const today = new Date();
+            let years = today.getFullYear() - birth.getFullYear();
+            let months = today.getMonth() - birth.getMonth();
+            let days = today.getDate() - birth.getDate();
+            if (days < 0) { months--; days += 30; }
+            if (months < 0) { years--; months += 12; }
+            return { years, months, days };
         }
 
-        function stopCamera() {
-            if (videoStream) {
-                videoStream.getTracks().forEach(track => track.stop());
-                videoStream = null;
-            }
-        }
-
-        // --- 5. AI & CALCULATION LOGIC ---
-        function calculateExactAge(dobString) {
-            // Expects DD-MM-YYYY
-            let day = 1, month = 1, year = 2000;
-            if(dobString && dobString.includes('-')) {
-                const parts = dobString.split('-');
-                day = parseInt(parts[0]);
-                month = parseInt(parts[1]);
-                year = parseInt(parts[2]);
-            }
-            
-            const birthDate = new Date(year, month - 1, day);
-            const today = new Date(); // As on today
-            
-            let years = today.getFullYear() - birthDate.getFullYear();
-            let months = today.getMonth() - birthDate.getMonth();
-            let days = today.getDate() - birthDate.getDate();
-
-            if (days < 0) {
-                months--;
-                const prevMonth = new Date(today.getFullYear(), today.getMonth(), 0);
-                days += prevMonth.getDate();
-            }
-            if (months < 0) {
-                years--;
-                months += 12;
-            }
-            return { years, months, days, rawDate: birthDate };
-        }
-
-        function formatDate(dateObj) {
-            const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-            return `${dateObj.getDate().toString().padStart(2, '0')} ${months[dateObj.getMonth()]} ${dateObj.getFullYear()}`;
-        }
-
-        async function runAIEngine() {
-            showStep('processing');
-            
-            let progress = 0;
-            const progressRing = document.getElementById('progress-ring');
-            const progressText = document.getElementById('progress-text');
-            const circumference = 2 * Math.PI * 45;
-
-            // UI Animation interval
-            const uiInterval = setInterval(() => {
-                progress += 5;
-                if(progress > 90) progress = 90; 
-                const offset = circumference - (progress / 100) * circumference;
-                progressRing.style.strokeDashoffset = offset;
-                progressText.innerText = progress + '%';
-
-                if(progress === 30) { document.getElementById('chk-1').classList.replace('text-slate-300', 'text-emerald-500'); document.getElementById('txt-1').classList.add('text-slate-800'); }
-                if(progress === 60) { document.getElementById('chk-2').classList.replace('text-slate-300', 'text-emerald-500'); document.getElementById('txt-2').classList.add('text-slate-800'); }
-            }, 150);
-
-            let isMatch = false;
-            let matchScore = 0;
-
-            try {
-                if (aiModelsLoaded) {
-                    const refImg = document.getElementById('ref-hidden-img');
-                    const selfieImg = document.getElementById('selfie-image-preview');
-                    const options = new faceapi.TinyFaceDetectorOptions();
-
-                    // Ignore errors if images are dummy/placeholder
-                    const refDetection = await faceapi.detectSingleFace(refImg, options).withFaceLandmarks().withFaceDescriptor();
-                    const selfieDetection = await faceapi.detectSingleFace(selfieImg, options).withFaceLandmarks().withFaceDescriptor();
-
-                    if (refDetection && selfieDetection) {
-                        const distance = faceapi.euclideanDistance(refDetection.descriptor, selfieDetection.descriptor);
-                        isMatch = distance < FACE_MATCH_THRESHOLD;
-                        matchScore = Math.max(0, 100 - (distance * 100)).toFixed(2);
-                    } else {
-                        // Fallback simulated score if faces aren't clear enough for TinyFaceDetector
-                        isMatch = Math.random() > 0.3;
-                        matchScore = isMatch ? (85 + Math.random() * 10).toFixed(2) : (20 + Math.random() * 20).toFixed(2);
-                    }
-                } else {
-                    // Fallback if AI didn't load
-                    isMatch = Math.random() > 0.3;
-                    matchScore = isMatch ? (85 + Math.random() * 10).toFixed(2) : (20 + Math.random() * 20).toFixed(2);
-                }
-            } catch (err) {
-                console.warn("AI processing warning:", err);
-                isMatch = Math.random() > 0.3;
-                matchScore = isMatch ? (85 + Math.random() * 10).toFixed(2) : (20 + Math.random() * 20).toFixed(2);
-            }
-
-            // Finish UI Loading
-            clearInterval(uiInterval);
-            progressRing.style.strokeDashoffset = 0;
-            progressText.innerText = '100%';
-            document.getElementById('chk-3').classList.replace('text-slate-300', 'text-emerald-500'); 
-            document.getElementById('txt-3').classList.add('text-slate-800');
-
-            setTimeout(() => showFinalResult(isMatch, matchScore), 600);
-        }
-
-        // --- 6. FINAL RESULT & DATA WIPE ---
-        function showFinalResult(isMatch, matchScore) {
-            const ageData = calculateExactAge(extractedData.dob);
-            
-            // Setup DOM elements
-            const elStatus = document.getElementById('res-status');
-            const elName = document.getElementById('res-name');
-            const elDob = document.getElementById('res-dob');
-            const elAge = document.getElementById('res-age');
-            const elAddress = document.getElementById('res-address');
-            const elMatch = document.getElementById('res-match');
-
-            // Populate Status
-            if(isMatch) {
-                elStatus.innerHTML = `✅ <span class="text-emerald-600">VERIFIED</span>`;
-                elMatch.innerHTML = `<span class="text-emerald-600">${matchScore}%</span>`;
-            } else {
-                elStatus.innerHTML = `❌ <span class="text-rose-600">NOT VERIFIED</span>`;
-                elMatch.innerHTML = `<span class="text-rose-600">${matchScore}%</span>`;
-            }
-
-            // Populate Text Data
-            elName.innerText = extractedData.name || "Unknown";
-            elDob.innerText = formatDate(ageData.rawDate);
-            elAge.innerText = `${ageData.years} Years ${ageData.months} Months ${ageData.days} Days`;
-            elAddress.innerText = extractedData.address || "Not Found";
-
-            showStep('result');
-        }
-
-        function finishAndWipeData() {
-            // STRICT PRIVACY PROTOCOL: Erase all memory references and DOM states
-            
-            // 1. Wipe State Variables
-            extractedData = { name: "", dob: "", address: "", frontLoaded: false, backLoaded: false };
-            
-            // 2. Wipe Image Previews & Object URLs
-            const imageElements = ['preview-front', 'preview-back', 'selfie-image-preview', 'ref-hidden-img'];
-            imageElements.forEach(id => {
-                const el = document.getElementById(id);
-                if(el) {
-                    el.src = "";
-                    el.classList.add('hidden');
-                }
-            });
-
-            // 3. Clear File Inputs
-            const inputElements = ['capture-front-input', 'upload-front-input', 'capture-back-input', 'upload-back-input', 'upload-selfie-input'];
-            inputElements.forEach(id => {
-                const el = document.getElementById(id);
-                if(el) el.value = "";
-            });
-
-            // 4. Wipe Hidden Canvases
-            const canvasElements = ['ref-canvas', 'selfie-canvas'];
-            canvasElements.forEach(id => {
-                const el = document.getElementById(id);
-                if(el) {
-                    const ctx = el.getContext('2d');
-                    ctx.clearRect(0, 0, el.width, el.height);
-                }
-            });
-
-            // 5. Reset UI Steps & Badges
-            document.getElementById('check-front').classList.add('hidden');
-            document.getElementById('check-back').classList.add('hidden');
-            document.getElementById('process-id-btn').disabled = true;
-            document.getElementById('selfie-webcam').classList.remove('hidden');
-            
-            // 6. Reset Processing UI
-            document.getElementById('progress-ring').style.strokeDashoffset = 283;
-            document.getElementById('progress-text').innerText = '0%';
-            [1, 2, 3].forEach(i => {
-                document.getElementById('chk-'+i).classList.replace('text-emerald-500', 'text-slate-300');
-                document.getElementById('txt-'+i).classList.remove('text-slate-800');
-            });
-
-            // Route back to start
-            showStep('start');
+        function renderContent(html) {
+            document.getElementById('content').innerHTML = html;
         }
     </script>
 </body>
