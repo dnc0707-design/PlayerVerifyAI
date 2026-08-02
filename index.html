@@ -2,15 +2,25 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>PlayerVerify AI</title>
+    
+    <!-- PWA Required Tags for PWABuilder -->
+    <meta name="description" content="PlayerVerify AI - Identity and Age Verification">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <!-- Links to the files PWABuilder will generate for you -->
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="https://placehold.co/192x192/0f172a/ffffff?text=PV">
+
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
     <style>
-        body { font-family: 'Inter', sans-serif; }
-        
-        /* Custom Animations */
         @keyframes scan {
             0% { top: 0; opacity: 0; }
             10% { opacity: 1; }
@@ -20,210 +30,177 @@
         .animate-scan {
             animation: scan 2s ease-in-out infinite;
         }
-        
+        .step-container {
+            display: none;
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+        .step-container.active {
+            display: flex;
+        }
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
         }
-        .fade-in {
-            animation: fadeIn 0.5s ease-out forwards;
-        }
-
-        /* Hide sections by default */
-        .step-container { display: none; }
-        .step-container.active { display: flex; }
     </style>
+
+    <script>
+        // Registering the Service Worker that PWABuilder generates
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js').catch(err => {
+                    console.log('SW not registered yet - PWABuilder will provide this.');
+                });
+            });
+        }
+    </script>
 </head>
-<body class="min-h-screen bg-slate-100 flex items-center justify-center p-4 text-slate-800">
+<body class="bg-slate-100 min-h-screen flex items-center justify-center p-4 font-sans text-slate-800">
 
     <div class="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden relative min-h-[700px] flex flex-col">
         
         <!-- App Header -->
-        <div class="bg-slate-900 text-white p-6 rounded-b-3xl shadow-md z-10 flex items-center justify-between">
-            <div class="flex items-center gap-3">
-                <i data-lucide="shield-check" class="text-emerald-400 w-8 h-8"></i>
-                <div>
-                    <h1 class="text-xl font-bold tracking-tight">PlayerVerify <span class="text-emerald-400 text-sm align-top">AI</span></h1>
-                    <p class="text-xs text-slate-400 font-medium">Tournament Identity Verification</p>
-                </div>
+        <div class="bg-slate-900 text-white p-6 rounded-b-3xl shadow-md z-10">
+          <div class="flex items-center gap-3">
+            <i data-lucide="shield-check" class="text-emerald-400 w-8 h-8"></i>
+            <div>
+              <h1 class="text-xl font-bold tracking-tight">PlayerVerify <span class="text-emerald-400 text-sm align-top">AI</span></h1>
+              <p class="text-xs text-slate-400 font-medium">U-23 District Cricket Tournament</p>
             </div>
+          </div>
         </div>
 
-        <!-- Content Area -->
-        <div class="flex-1 p-6 flex flex-col relative overflow-y-auto w-full">
+        <div class="flex-1 p-6 flex flex-col relative overflow-y-auto" id="app-content">
             
-            <!-- Step 1: Aadhaar QR Scan -->
-            <div id="step-scan" class="step-container active flex-1 flex-col justify-center items-center fade-in">
-                <div class="text-center mb-10">
-                    <h2 class="text-2xl font-bold mb-2">Scan Aadhaar</h2>
-                    <p class="text-slate-500 text-sm px-4">Scan the secure QR code on the Aadhaar card to extract data locally.</p>
+            <!-- STEP 1: SCAN -->
+            <div id="step-scan" class="step-container active flex-1 flex-col justify-center items-center">
+                <div class="text-center mb-8">
+                  <h2 class="text-2xl font-bold mb-2">Scan Aadhaar QR</h2>
+                  <p class="text-slate-500 text-sm px-4">Upload or scan Aadhaar securely.</p>
                 </div>
-
-                <div class="relative w-64 h-64 border-4 border-dashed border-blue-400 rounded-3xl flex items-center justify-center bg-blue-50 mb-10 overflow-hidden group shadow-inner">
-                    <!-- Default state -->
-                    <div id="scan-idle" class="flex flex-col items-center">
-                        <i data-lucide="scan-line" class="w-20 h-20 text-blue-300 transition-transform duration-300 group-hover:scale-110"></i>
-                    </div>
-                    
-                    <!-- Processing state -->
-                    <div id="scan-processing" class="hidden absolute inset-0 bg-blue-600/10 flex-col items-center justify-center backdrop-blur-sm z-10">
-                        <div class="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-3"></div>
-                        <span class="text-blue-700 font-bold text-sm tracking-wide">Reading QR Data...</span>
-                    </div>
-
-                    <!-- Scanning animation line -->
-                    <div class="absolute top-0 left-0 w-full h-1 bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.8)] animate-scan"></div>
+  
+                <div class="relative w-64 h-64 border-4 border-dashed border-blue-400 rounded-3xl flex items-center justify-center bg-blue-50 mb-12 overflow-hidden group">
+                  <i data-lucide="qr-code" class="w-24 h-24 text-blue-300"></i>
+                  <div class="absolute top-0 left-0 w-full h-1 bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.8)] animate-scan"></div>
                 </div>
-
-                <button id="btn-simulate-scan" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition-colors shadow-lg shadow-blue-200 flex items-center justify-center gap-2 text-lg">
-                    <i data-lucide="qr-code" class="w-6 h-6"></i>
-                    Open Scanner
+  
+                <button onclick="simulateScan()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition-colors shadow-lg flex items-center justify-center gap-2 text-lg">
+                  <i data-lucide="scan-line" class="w-5 h-5"></i>
+                  Click to Scan / Upload QR
                 </button>
             </div>
 
-            <!-- Step 2: Data Collected Interstitial -->
-            <div id="step-collected" class="step-container flex-1 flex-col justify-center items-center fade-in">
+            <!-- STEP 2: DATA COLLECTED -->
+            <div id="step-collected" class="step-container flex-1 flex-col justify-center items-center">
                 <div class="w-24 h-24 bg-emerald-100 rounded-full flex items-center justify-center mb-6">
-                    <i data-lucide="check-circle-2" class="w-12 h-12 text-emerald-600"></i>
+                   <i data-lucide="check-circle-2" class="w-12 h-12 text-emerald-600"></i>
                 </div>
-                <h2 class="text-3xl font-black text-slate-800 mb-2">Data Collected</h2>
-                <p class="text-slate-500 text-center mb-10 px-6">Demographic data and Aadhaar photo extracted successfully.</p>
-
-                <button id="btn-start-selfie" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-xl transition-colors shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 text-lg">
-                    <i data-lucide="camera" class="w-6 h-6"></i>
-                    Start Selfie Verification
+                <h2 class="text-3xl font-black text-slate-800 mb-2 text-center">Data Collected</h2>
+                <p class="text-slate-500 text-center mb-10 px-6">
+                  Demographic data and Aadhaar photo extracted successfully from QR.
+                </p>
+ 
+                <button onclick="goToSelfie()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-xl transition-colors shadow-lg flex items-center justify-center gap-2 text-lg">
+                  <i data-lucide="camera" class="w-6 h-6"></i>
+                  Start Selfie Verification
                 </button>
             </div>
 
-            <!-- Step 3: Live Selfie Capture -->
-            <div id="step-selfie" class="step-container flex-1 flex-col items-center fade-in">
+            <!-- STEP 3: SELFIE -->
+            <div id="step-selfie" class="step-container flex-1 flex-col items-center">
                 <div class="w-full text-center mb-6">
-                    <h2 class="text-2xl font-bold mb-2">Live Verification</h2>
-                    <p class="text-slate-500 text-sm">Position your face clearly to match with the Aadhaar photo.</p>
+                  <h2 class="text-2xl font-bold mb-2">Live Verification</h2>
+                  <p class="text-slate-500 text-sm">Position your face to match Aadhaar.</p>
                 </div>
-
-                <div class="relative w-full aspect-[3/4] max-w-[280px] rounded-[3rem] overflow-hidden bg-slate-900 shadow-2xl mb-8 border-4 border-white ring-4 ring-slate-100">
-                    <div id="camera-error" class="hidden absolute inset-0 flex-col items-center justify-center p-6 text-center bg-slate-100 z-10">
-                        <i data-lucide="alert-circle" class="w-12 h-12 text-rose-400 mb-3"></i>
-                        <p class="text-sm font-medium text-slate-600 mb-4">Camera blocked or unavailable.</p>
+  
+                <div class="relative w-64 h-80 rounded-[4rem] overflow-hidden bg-slate-900 border-8 border-slate-100 shadow-xl mb-8 flex items-center justify-center">
+                    <video id="webcam" autoplay playsinline muted class="w-full h-full object-cover transform -scale-x-100"></video>
+                    <div id="camera-error" class="absolute hidden flex-col items-center justify-center text-center p-4">
+                        <i data-lucide="alert-circle" class="w-10 h-10 text-rose-400 mb-2"></i>
+                        <p class="text-slate-300 text-sm">Camera unavailable. Simulating.</p>
                     </div>
-                    
-                    <video id="webcam-video" autoplay playsinline muted class="w-full h-full object-cover transform -scale-x-100"></video>
-                    
-                    <!-- Face Guide Overlay -->
-                    <div class="absolute inset-0 border-[4px] border-white/30 rounded-[3rem] pointer-events-none m-4"></div>
-                    <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-48 h-64 border-2 border-dashed border-emerald-400/70 rounded-[100%] pointer-events-none"></div>
                 </div>
-
-                <button id="btn-capture" class="w-full bg-slate-900 hover:bg-black text-white font-bold py-4 rounded-xl transition-colors shadow-xl flex items-center justify-center gap-3 text-lg mt-auto">
-                    <div class="w-6 h-6 rounded-full border-2 border-white flex items-center justify-center p-0.5">
-                        <div class="w-full h-full bg-white rounded-full"></div>
-                    </div>
-                    <span id="btn-capture-text">Click to Verify</span>
+  
+                <button onclick="startProcessing()" class="w-full mt-auto bg-slate-900 hover:bg-black text-white font-bold py-4 rounded-xl transition-colors shadow-lg flex items-center justify-center gap-2 text-lg">
+                  <i data-lucide="camera" class="w-6 h-6"></i>
+                  Capture & Verify
                 </button>
             </div>
 
-            <!-- Step 4: Processing Status -->
-            <div id="step-processing" class="step-container flex-1 flex-col items-center justify-center fade-in">
-                <div class="relative w-32 h-32 mb-10">
-                    <svg class="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-                        <circle cx="50" cy="50" r="45" fill="none" stroke="#f1f5f9" stroke-width="8" />
-                        <circle id="progress-circle" cx="50" cy="50" r="45" fill="none" stroke="#3b82f6" stroke-width="8" stroke-linecap="round" style="stroke-dasharray: 282.743; stroke-dashoffset: 282.743; transition: stroke-dashoffset 0.3s ease-out;" />
-                    </svg>
-                    <div class="absolute inset-0 flex items-center justify-center">
-                        <span id="progress-text" class="text-3xl font-black text-blue-600">0%</span>
-                    </div>
+            <!-- STEP 4: PROCESSING -->
+            <div id="step-processing" class="step-container flex-1 flex-col items-center justify-center">
+                <div class="relative w-32 h-32 mb-8">
+                  <svg class="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                    <circle cx="50" cy="50" r="45" fill="none" stroke="#f1f5f9" stroke-width="8" />
+                    <circle id="progress-ring" cx="50" cy="50" r="45" fill="none" stroke="#3b82f6" stroke-width="8" stroke-linecap="round" stroke-dasharray="283" stroke-dashoffset="283" class="transition-all duration-300 ease-out" />
+                  </svg>
+                  <div class="absolute inset-0 flex items-center justify-center">
+                    <span id="progress-text" class="text-2xl font-bold text-blue-600">0%</span>
+                  </div>
                 </div>
-
-                <div class="space-y-5 w-full px-4 max-w-sm">
-                    <div class="flex items-center gap-4 bg-white p-3 rounded-xl shadow-sm border border-slate-100">
-                        <div id="status-1-icon" class="w-8 h-8 rounded-full flex items-center justify-center bg-slate-100 text-slate-400 transition-colors">
-                            <i data-lucide="check-circle-2" class="w-5 h-5"></i>
-                        </div>
-                        <span id="status-1-text" class="font-semibold text-slate-400 transition-colors">Analyzing live photo...</span>
-                    </div>
-                    <div class="flex items-center gap-4 bg-white p-3 rounded-xl shadow-sm border border-slate-100">
-                        <div id="status-2-icon" class="w-8 h-8 rounded-full flex items-center justify-center bg-slate-100 text-slate-400 transition-colors">
-                            <i data-lucide="check-circle-2" class="w-5 h-5"></i>
-                        </div>
-                        <span id="status-2-text" class="font-semibold text-slate-400 transition-colors">Matching with Aadhaar ID...</span>
-                    </div>
-                    <div class="flex items-center gap-4 bg-white p-3 rounded-xl shadow-sm border border-slate-100">
-                        <div id="status-3-icon" class="w-8 h-8 rounded-full flex items-center justify-center bg-slate-100 text-slate-400 transition-colors">
-                            <i data-lucide="check-circle-2" class="w-5 h-5"></i>
-                        </div>
-                        <span id="status-3-text" class="font-semibold text-slate-400 transition-colors">Calculating exact age...</span>
-                    </div>
+  
+                <div class="space-y-4 w-full px-8">
+                  <div class="flex items-center gap-3 text-sm font-medium text-slate-600">
+                    <i id="chk-1" data-lucide="check-circle-2" class="w-5 h-5 text-slate-300"></i>
+                    <span id="txt-1">Analyzing AI Face Match...</span>
+                  </div>
+                  <div class="flex items-center gap-3 text-sm font-medium text-slate-600">
+                    <i id="chk-2" data-lucide="check-circle-2" class="w-5 h-5 text-slate-300"></i>
+                    <span id="txt-2">Calculating Exact Age...</span>
+                  </div>
+                  <div class="flex items-center gap-3 text-sm font-medium text-slate-600">
+                    <i id="chk-3" data-lucide="check-circle-2" class="w-5 h-5 text-slate-300"></i>
+                    <span id="txt-3">Verifying Address...</span>
+                  </div>
                 </div>
             </div>
 
-            <!-- Step 5: Final Result -->
-            <div id="step-result" class="step-container flex-1 flex-col fade-in pb-4">
-                <div class="flex flex-col items-center mb-6 pt-4">
-                    <div class="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mb-4 ring-8 ring-emerald-50">
-                        <i data-lucide="check-circle-2" class="w-10 h-10 text-emerald-600"></i>
-                    </div>
-                    <h2 class="text-2xl font-black text-slate-800">Verification Complete</h2>
-                    <div class="mt-2 bg-emerald-500 text-white px-4 py-1 rounded-full text-sm font-bold shadow-sm">
-                        Face Match: 98.4%
-                    </div>
-                </div>
+            <!-- STEP 5: RESULT -->
+            <div id="step-result" class="step-container flex-1 flex-col items-center pt-2 pb-4">
+                <i data-lucide="check-circle-2" class="w-16 h-16 text-emerald-600 mb-2"></i>
+                <h2 class="text-2xl font-black text-slate-800 mb-1">Verification Complete</h2>
+                <p class="text-slate-500 mb-6 text-sm">Player details authenticated.</p>
                 
-                <!-- Data Card -->
-                <div class="w-full bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden mb-6 flex-shrink-0">
-                    
-                    <!-- Name Section -->
-                    <div class="p-4 border-b border-slate-100 flex items-start gap-4">
-                        <div class="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center flex-shrink-0 mt-1">
-                            <i data-lucide="user" class="w-5 h-5 text-blue-600"></i>
-                        </div>
-                        <div>
-                            <p class="text-xs text-slate-400 font-bold uppercase tracking-wider mb-0.5">Verified Name</p>
-                            <p id="res-name" class="text-lg font-black text-slate-800">-</p>
-                        </div>
+                <div class="w-full bg-emerald-50 border border-emerald-100 rounded-2xl p-5 mb-6 shadow-sm flex flex-col gap-4">
+                  
+                  <div class="flex justify-between items-center border-b border-emerald-100 pb-3">
+                    <div>
+                      <p class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Name</p>
+                      <p id="res-name" class="font-bold text-slate-800 text-lg"></p>
                     </div>
-
-                    <!-- Age Section -->
-                    <div class="p-4 border-b border-slate-100 bg-slate-50 flex items-start gap-4">
-                        <div class="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center flex-shrink-0 mt-1">
-                            <i data-lucide="calendar-days" class="w-5 h-5 text-indigo-600"></i>
-                        </div>
-                        <div class="w-full">
-                            <p class="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">Exact Age (As of Today)</p>
-                            <div class="flex gap-2 w-full">
-                                <div class="bg-white border border-slate-200 rounded-lg p-2 flex-1 text-center shadow-sm">
-                                    <span id="res-years" class="block text-xl font-black text-indigo-700">-</span>
-                                    <span class="text-[10px] text-slate-500 font-bold uppercase">Years</span>
-                                </div>
-                                <div class="bg-white border border-slate-200 rounded-lg p-2 flex-1 text-center shadow-sm">
-                                    <span id="res-months" class="block text-xl font-black text-indigo-700">-</span>
-                                    <span class="text-[10px] text-slate-500 font-bold uppercase">Months</span>
-                                </div>
-                                <div class="bg-white border border-slate-200 rounded-lg p-2 flex-1 text-center shadow-sm">
-                                    <span id="res-days" class="block text-xl font-black text-indigo-700">-</span>
-                                    <span class="text-[10px] text-slate-500 font-bold uppercase">Days</span>
-                                </div>
-                            </div>
-                            <p id="res-dob" class="text-xs text-slate-500 mt-2 font-medium">DOB: -</p>
-                        </div>
+                    <div class="text-right">
+                      <p class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Identity Match</p>
+                      <p class="font-bold text-emerald-600">98.4% (Verified)</p>
                     </div>
-
-                    <!-- Address Section -->
-                    <div class="p-4 flex items-start gap-4">
-                        <div class="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center flex-shrink-0 mt-1">
-                            <i data-lucide="map-pin" class="w-5 h-5 text-amber-600"></i>
-                        </div>
-                        <div>
-                            <p class="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">Registered Address</p>
-                            <p id="res-address" class="text-sm font-medium text-slate-700 leading-snug">-</p>
-                        </div>
-                    </div>
-
+                  </div>
+  
+                  <div class="border-b border-emerald-100 pb-3">
+                      <p class="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">Exact Age (As of Today)</p>
+                      <div class="flex gap-2 w-full">
+                         <div class="bg-white rounded p-1 flex-1 text-center shadow-sm border border-emerald-100">
+                            <span id="res-years" class="block text-lg font-black text-emerald-700"></span>
+                            <span class="text-[9px] text-slate-500 font-bold uppercase">Years</span>
+                         </div>
+                         <div class="bg-white rounded p-1 flex-1 text-center shadow-sm border border-emerald-100">
+                            <span id="res-months" class="block text-lg font-black text-emerald-700"></span>
+                            <span class="text-[9px] text-slate-500 font-bold uppercase">Months</span>
+                         </div>
+                         <div class="bg-white rounded p-1 flex-1 text-center shadow-sm border border-emerald-100">
+                            <span id="res-days" class="block text-lg font-black text-emerald-700"></span>
+                            <span class="text-[9px] text-slate-500 font-bold uppercase">Days</span>
+                         </div>
+                      </div>
+                  </div>
+  
+                  <div>
+                    <p class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Address Extracted</p>
+                    <p id="res-address" class="font-semibold text-slate-700 text-xs mt-1 leading-relaxed"></p>
+                  </div>
+                  
                 </div>
-
-                <button id="btn-reset" class="w-full mt-auto bg-slate-900 hover:bg-black text-white font-bold py-4 rounded-xl transition-all shadow-xl flex items-center justify-center gap-2">
-                    <i data-lucide="qr-code" class="w-5 h-5"></i>
-                    Scan Next Player
+  
+                <button onclick="resetApp()" class="w-full mt-auto bg-slate-900 hover:bg-black text-white font-bold py-4 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2">
+                  <i data-lucide="qr-code" class="w-5 h-5"></i>
+                  Scan Next Player
                 </button>
             </div>
 
@@ -234,35 +211,59 @@
         // Initialize Icons
         lucide.createIcons();
 
-        // State Variables
-        let currentStream = null;
-        let playerData = null;
-
-        // DOM Elements
-        const steps = {
-            scan: document.getElementById('step-scan'),
-            collected: document.getElementById('step-collected'),
-            selfie: document.getElementById('step-selfie'),
-            processing: document.getElementById('step-processing'),
-            result: document.getElementById('step-result')
+        // App State
+        const mockData = {
+            name: "Rahul Sharma",
+            dob: "15-08-2004", // DD-MM-YYYY
+            address: "S/O: Anil Sharma, H.No 42, Sector 14, Rohini, North West Delhi, New Delhi, Delhi, 110085"
         };
+        let videoStream = null;
 
-        // Helper function to switch steps
-        function showStep(stepName) {
-            Object.values(steps).forEach(el => el.classList.remove('active'));
-            steps[stepName].classList.add('active');
-            lucide.createIcons(); // Refresh icons for new active step
+        function showStep(stepId) {
+            document.querySelectorAll('.step-container').forEach(el => el.classList.remove('active'));
+            document.getElementById('step-' + stepId).classList.add('active');
         }
 
-        // Exact Age Calculation Logic
-        function calculateExactAge(dobString) {
-            const parts = dobString.split('-');
-            const day = parseInt(parts[0], 10);
-            const month = parseInt(parts[1], 10) - 1; // JS months are 0-11
-            const year = parseInt(parts[2], 10);
+        function simulateScan() {
+            // Show loading inside scan button in a real app, here we jump to collected
+            setTimeout(() => {
+                showStep('collected');
+            }, 800);
+        }
+
+        function goToSelfie() {
+            showStep('selfie');
+            startCamera();
+        }
+
+        function startCamera() {
+            const video = document.getElementById('webcam');
+            const errorDiv = document.getElementById('camera-error');
             
-            const birthDate = new Date(year, month, day);
-            const today = new Date(); // Current date
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })
+                .then(stream => {
+                    videoStream = stream;
+                    video.srcObject = stream;
+                    errorDiv.classList.add('hidden');
+                })
+                .catch(err => {
+                    console.error("Camera error:", err);
+                    errorDiv.classList.remove('hidden');
+                    errorDiv.classList.add('flex');
+                });
+        }
+
+        function stopCamera() {
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+                videoStream = null;
+            }
+        }
+
+        function calculateExactAge(dobString) {
+            const [day, month, year] = dobString.split('-');
+            const birthDate = new Date(`${year}-${month}-${day}`);
+            const today = new Date(); // Gets the exact current date
             
             let years = today.getFullYear() - birthDate.getFullYear();
             let months = today.getMonth() - birthDate.getMonth();
@@ -270,7 +271,6 @@
 
             if (days < 0) {
                 months--;
-                // Get days in the previous month
                 const previousMonth = new Date(today.getFullYear(), today.getMonth(), 0);
                 days += previousMonth.getDate();
             }
@@ -283,139 +283,68 @@
             return { years, months, days };
         }
 
-        
-        // 1. Scan Simulate Button
-        document.getElementById('btn-simulate-scan').addEventListener('click', function() {
-            const btn = this;
-            btn.disabled = true;
-            btn.classList.add('bg-blue-300');
-            btn.classList.remove('hover:bg-blue-700');
-            
-            document.getElementById('scan-idle').classList.add('hidden');
-            document.getElementById('scan-processing').classList.remove('hidden');
-            document.getElementById('scan-processing').classList.add('flex');
-
-            setTimeout(() => {
-                // Mock extracted data
-                const dobFromQR = "15-08-2004"; 
-                playerData = {
-                    name: "Rahul Sharma",
-                    dob: dobFromQR,
-                    exactAge: calculateExactAge(dobFromQR),
-                    address: "S/O: Anil Sharma, H.No 42, Sector 14, Rohini, North West Delhi, New Delhi, Delhi, 110085"
-                };
-                
-                // Reset styling for next time
-                btn.disabled = false;
-                btn.classList.remove('bg-blue-300');
-                btn.classList.add('hover:bg-blue-700');
-                document.getElementById('scan-idle').classList.remove('hidden');
-                document.getElementById('scan-processing').classList.add('hidden');
-                document.getElementById('scan-processing').classList.remove('flex');
-                
-                showStep('collected');
-            }, 1500);
-        });
-
-        // 2. Start Selfie Button
-        document.getElementById('btn-start-selfie').addEventListener('click', function() {
-            showStep('selfie');
-            startCamera();
-        });
-
-        function startCamera() {
-            const videoElement = document.getElementById('webcam-video');
-            const errorElement = document.getElementById('camera-error');
-            const captureBtnText = document.getElementById('btn-capture-text');
-
-            navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })
-                .then((stream) => {
-                    currentStream = stream;
-                    videoElement.srcObject = stream;
-                    errorElement.classList.add('hidden');
-                    errorElement.classList.remove('flex');
-                    captureBtnText.innerText = "Click to Verify";
-                })
-                .catch((err) => {
-                    console.error("Camera access denied or unavailable", err);
-                    errorElement.classList.remove('hidden');
-                    errorElement.classList.add('flex');
-                    captureBtnText.innerText = "Simulate Capture";
-                });
-        }
-
-        function stopCamera() {
-            if (currentStream) {
-                currentStream.getTracks().forEach(track => track.stop());
-                currentStream = null;
-            }
-        }
-
-        
-        // 3. Capture & Verify Button
-        document.getElementById('btn-capture').addEventListener('click', function() {
+        function startProcessing() {
             stopCamera();
             showStep('processing');
-            startProcessing();
-        });
-
-        function startProcessing() {
+            
             let progress = 0;
-            const progressCircle = document.getElementById('progress-circle');
+            const progressRing = document.getElementById('progress-ring');
             const progressText = document.getElementById('progress-text');
-            const maxDashOffset = 282.743; // 2 * PI * 45 (radius)
-
-            // Reset UI
-            progressCircle.style.strokeDashoffset = maxDashOffset;
-            progressText.innerText = "0%";
-            ['status-1', 'status-2', 'status-3'].forEach(id => {
-                document.getElementById(`${id}-icon`).className = "w-8 h-8 rounded-full flex items-center justify-center bg-slate-100 text-slate-400 transition-colors";
-                document.getElementById(`${id}-text`).className = "font-semibold text-slate-400 transition-colors";
-            });
+            const circumference = 2 * Math.PI * 45; // 283
 
             const interval = setInterval(() => {
-                progress += 20;
+                progress += 10;
                 
-                // Update circle
-                const offset = maxDashOffset * (1 - progress / 100);
-                progressCircle.style.strokeDashoffset = offset;
-                progressText.innerText = `${progress}%`;
+                // Update ring and text
+                const offset = circumference - (progress / 100) * circumference;
+                progressRing.style.strokeDashoffset = offset;
+                progressText.innerText = progress + '%';
 
-                // Update steps
-                if (progress >= 30) activateStatus('status-1');
-                if (progress >= 60) activateStatus('status-2');
-                if (progress >= 100) {
-                    activateStatus('status-3');
-                    clearInterval(interval);
-                    setTimeout(() => populateAndShowResult(), 600);
+                // Update checklist
+                if(progress === 30) {
+                    document.getElementById('chk-1').classList.replace('text-slate-300', 'text-emerald-500');
+                    document.getElementById('txt-1').classList.add('text-slate-800');
                 }
-            }, 500);
+                if(progress === 60) {
+                    document.getElementById('chk-2').classList.replace('text-slate-300', 'text-emerald-500');
+                    document.getElementById('txt-2').classList.add('text-slate-800');
+                }
+                if(progress === 90) {
+                    document.getElementById('chk-3').classList.replace('text-slate-300', 'text-emerald-500');
+                    document.getElementById('txt-3').classList.add('text-slate-800');
+                }
+
+                if (progress >= 100) {
+                    clearInterval(interval);
+                    setTimeout(showResult, 500);
+                }
+            }, 300);
         }
 
-        function activateStatus(prefix) {
-            document.getElementById(`${prefix}-icon`).className = "w-8 h-8 rounded-full flex items-center justify-center bg-emerald-100 text-emerald-600 transition-colors";
-            document.getElementById(`${prefix}-text`).className = "font-semibold text-slate-800 transition-colors";
-        }
-
-        
-        // 4. Show Results
-        function populateAndShowResult() {
-            document.getElementById('res-name').innerText = playerData.name;
-            document.getElementById('res-years').innerText = playerData.exactAge.years;
-            document.getElementById('res-months').innerText = playerData.exactAge.months;
-            document.getElementById('res-days').innerText = playerData.exactAge.days;
-            document.getElementById('res-dob').innerText = `DOB: ${playerData.dob}`;
-            document.getElementById('res-address').innerText = playerData.address;
+        function showResult() {
+            const exactAge = calculateExactAge(mockData.dob);
             
+            document.getElementById('res-name').innerText = mockData.name;
+            document.getElementById('res-years').innerText = exactAge.years;
+            document.getElementById('res-months').innerText = exactAge.months;
+            document.getElementById('res-days').innerText = exactAge.days;
+            document.getElementById('res-address').innerText = mockData.address;
+
             showStep('result');
         }
 
-        // 5. Reset Flow
-        document.getElementById('btn-reset').addEventListener('click', function() {
-            playerData = null;
-            showStep('scan');
-        });
+        function resetApp() {
+            // Reset UI states
+            document.getElementById('progress-ring').style.strokeDashoffset = 283;
+            document.getElementById('progress-text').innerText = '0%';
+            
+            [1, 2, 3].forEach(i => {
+                document.getElementById('chk-'+i).classList.replace('text-emerald-500', 'text-slate-300');
+                document.getElementById('txt-'+i).classList.remove('text-slate-800');
+            });
 
+            showStep('scan');
+        }
     </script>
 </body>
 </html>
