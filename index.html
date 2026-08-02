@@ -5,44 +5,54 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>PlayerVerify AI</title>
 
-    <!-- PWA Required Tags -->
-    <meta name="description" content="PlayerVerify AI - Identity and Age Verification">
+    <meta name="description" content="Tournament Identity Verification">
     <meta name="theme-color" content="#0f172a">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="https://placehold.co/192x192/0f172a/ffffff?text=PV">
 
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- HTML5 QR Code Scanner -->
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
-    <!-- REAL AI Face Recognition Engine (face-api.js) -->
     <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
-    <!-- Client-side OCR engine (Tesseract.js) for reading the captured Aadhaar front/back photos -->
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
     <style>
-        @keyframes scan { 0% { top: 0; opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { top: 100%; opacity: 0; } }
-        .animate-scan { animation: scan 2s ease-in-out infinite; }
-        .step-container { display: none; animation: fadeIn 0.5s ease-out forwards; }
-        .step-container.active { display: flex; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        body { -webkit-tap-highlight-color: transparent; }
+        .glass-card { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
+        .view-section { display: none; animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .view-section.active { display: flex; }
+        
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes scanLine {
+            0% { top: 0; opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { top: 100%; opacity: 0; }
+        }
+        .animate-scan-line { animation: scanLine 2s linear infinite; }
+        
+        /* Hide scrollbar for clean UI */
+        ::-webkit-scrollbar { display: none; }
     </style>
 
     <script>
         if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(err => console.log('SW not registered')); });
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js').catch(err => console.log('SW Registration failed'));
+            });
         }
     </script>
 
-    <!-- ===================== FIREBASE (modular v10, CDN, no build step needed) ===================== -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-        import { getAnalytics, logEvent, isSupported as analyticsIsSupported } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics.js";
-        import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        import { getAnalytics, logEvent } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics.js";
 
+        // STRICT PRIVACY: Only Analytics is initialized. No Auth, No Firestore, No Storage.
         const firebaseConfig = {
             apiKey: "AIzaSyArEqVujLxbvRBDJ9WlRKI78Myz_U0udJU",
             authDomain: "playerverifyai.firebaseapp.com",
@@ -53,768 +63,620 @@
             measurementId: "G-Z2L2CH4HDY"
         };
 
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-
-        let analytics = null;
-        analyticsIsSupported().then((ok) => {
-            if (ok) analytics = getAnalytics(app);
-        }).catch(() => { /* analytics not supported in this environment (e.g. file://) */ });
-
-        // Expose a small bridge so the classic (non-module) app script below can use Firebase.
-        // Module scripts are deferred, but by the time a user finishes scan -> capture -> selfie -> processing,
-        // this will already be populated, so we guard every call with `window.firebaseBridge?.`
-        window.firebaseBridge = {
-            async logVerification(record) {
-                try {
-                    await addDoc(collection(db, "verifications"), {
-                        ...record,
-                        createdAt: serverTimestamp()
-                    });
-                } catch (err) {
-                    console.warn("Firestore log failed (non-blocking):", err);
-                }
-            },
-            async logConsent(record) {
-                try {
-                    await addDoc(collection(db, "consents"), {
-                        ...record,
-                        createdAt: serverTimestamp()
-                    });
-                } catch (err) {
-                    console.warn("Firestore consent log failed (non-blocking):", err);
-                }
-            },
-            trackEvent(name, params) {
-                if (analytics) {
-                    try { logEvent(analytics, name, params); } catch (e) { /* ignore */ }
-                }
-            }
-        };
+        try {
+            const app = initializeApp(firebaseConfig);
+            window.firebaseAnalytics = getAnalytics(app);
+            logEvent(window.firebaseAnalytics, 'app_open');
+        } catch(e) {
+            console.warn("Firebase Analytics failed to initialize. Proceeding offline.");
+        }
     </script>
-    <!-- ============================================================================================= -->
-
 </head>
-<body class="bg-slate-100 min-h-screen flex items-center justify-center p-4 font-sans text-slate-800">
 
-    <div class="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden relative min-h-[750px] flex flex-col">
+<body class="bg-slate-900 min-h-screen flex items-center justify-center p-0 sm:p-4 font-sans text-slate-800 selection:bg-blue-200">
 
+    <div class="w-full h-[100dvh] sm:h-auto sm:max-w-md sm:min-h-[800px] bg-slate-50 sm:rounded-[2.5rem] shadow-2xl overflow-hidden relative flex flex-col">
+        
         <!-- App Header -->
-        <div class="bg-slate-900 text-white p-6 rounded-b-3xl shadow-md z-10">
-          <div class="flex items-center gap-3">
-            <i data-lucide="shield-check" class="text-emerald-400 w-8 h-8"></i>
-            <div>
-              <h1 class="text-xl font-bold tracking-tight">PlayerVerify <span class="text-emerald-400 text-sm align-top">AI</span></h1>
-              <p class="text-xs text-slate-400 font-medium">Tournament Identity Verification</p>
+        <div class="bg-gradient-to-r from-slate-900 to-slate-800 text-white p-6 sm:rounded-t-[2.5rem] shadow-lg z-20 flex-shrink-0">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-emerald-400/20 flex items-center justify-center">
+                    <i data-lucide="shield-check" class="text-emerald-400 w-6 h-6"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-black tracking-tight">PlayerVerify <span class="text-emerald-400 text-sm align-top">AI</span></h1>
+                    <p class="text-xs text-slate-400 font-medium tracking-wide uppercase mt-0.5">Identity Verification</p>
+                </div>
             </div>
-          </div>
         </div>
 
-        <div class="flex-1 p-6 flex flex-col relative overflow-y-auto" id="app-content">
+        <!-- Scrollable Content Area -->
+        <div class="flex-1 flex flex-col relative overflow-y-auto">
+            
+            <div id="view-splash" class="view-section active flex-1 flex-col justify-center items-center p-6 text-center">
+                <div class="w-32 h-32 bg-white rounded-3xl shadow-xl flex items-center justify-center mb-8 rotate-3 transition-transform">
+                    <i data-lucide="fingerprint" class="w-16 h-16 text-blue-600"></i>
+                </div>
+                <h2 class="text-3xl font-black text-slate-800 mb-3">Secure Verification</h2>
+                <p class="text-slate-500 text-sm mb-10 px-4 leading-relaxed">
+                    100% Local Processing. Your data never leaves this device and is permanently deleted after verification.
+                </p>
+                
+                <div id="model-loader" class="w-full flex flex-col items-center">
+                    <div class="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-3"></div>
+                    <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Loading AI Engine...</span>
+                </div>
 
-            <!-- STEP 0: LOADING AI -->
-            <div id="step-loading" class="step-container active flex-1 flex-col justify-center items-center">
-                <div id="loading-spinner" class="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-6"></div>
-                <h2 id="loading-title" class="text-2xl font-bold mb-2">Initializing AI</h2>
-                <p id="loading-desc" class="text-slate-500 text-sm text-center px-4 mb-6">Downloading lightweight facial recognition models to your device for offline processing...</p>
-
-                <!-- Fallback button if network is slow -->
-                <button id="ai-bypass-btn" onclick="bypassAILoad()" class="hidden bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-3 px-6 rounded-xl transition-colors text-sm">
-                  Skip (Simulate AI for Testing)
+                <button id="btn-start" onclick="startWorkflow()" class="hidden w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-4 rounded-2xl transition-all shadow-[0_8px_30px_rgb(37,99,235,0.3)] flex items-center justify-center gap-2 text-lg active:scale-[0.98]">
+                    Start Verification <i data-lucide="arrow-right" class="w-5 h-5"></i>
                 </button>
             </div>
 
-            <!-- STEP 0.5: AADHAAR DATA CONSENT -->
-            <div id="step-consent" class="step-container flex-1 flex-col justify-center items-center">
-                <div class="text-center mb-4">
-                  <i data-lucide="file-check-2" class="w-12 h-12 text-blue-600 mx-auto mb-3"></i>
-                  <h2 class="text-2xl font-bold mb-2">Consent to Verify</h2>
-                  <p class="text-slate-500 text-sm px-2">Please read and agree before we scan your Aadhaar.</p>
-                </div>
-
-                <div class="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 mb-5 text-xs text-slate-600 leading-relaxed max-h-56 overflow-y-auto">
-                  <p class="mb-2">By continuing, you agree that this tournament may, for the sole purpose of confirming your identity and age for eligibility:</p>
-                  <ul class="list-disc pl-4 space-y-1 mb-2">
-                    <li>Scan your Aadhaar QR code, or capture photos of the front/back of your Aadhaar card if the QR scan is unavailable</li>
-                    <li>Capture a live selfie and compare it against your Aadhaar photo using on-device face matching</li>
-                    <li>Extract and store your name, date of birth, and address from your Aadhaar for verification and audit purposes</li>
-                  </ul>
-                  <p class="mb-2">Your data will be used only for tournament eligibility checks and will not be shared with third parties or used for any other purpose. You may ask the organizers about how long this data is retained and request its deletion.</p>
-                  <p>You must be the person whose Aadhaar is being scanned, or their parent/guardian, to give this consent.</p>
-                </div>
-
-                <label class="w-full flex items-start gap-3 mb-6 cursor-pointer select-none">
-                  <input type="checkbox" id="consent-checkbox" onchange="toggleConsentButton()" class="mt-1 w-5 h-5 accent-blue-600 shrink-0">
-                  <span class="text-sm font-semibold text-slate-700">I have read the above and I consent to my Aadhaar and selfie being captured and processed for identity/age verification.</span>
-                </label>
-
-                <button id="consent-continue-btn" onclick="acceptConsent()" disabled class="w-full bg-slate-300 text-slate-500 font-bold py-4 rounded-xl transition-colors shadow-lg flex items-center justify-center gap-2 text-lg cursor-not-allowed">
-                  <i data-lucide="check" class="w-5 h-5"></i>
-                  Agree & Continue
-                </button>
-            </div>
-
-            <!-- STEP 1: SCAN QR -->
-            <div id="step-scan" class="step-container flex-1 flex-col justify-center items-center">
+            <div id="view-scan" class="view-section flex-1 flex-col justify-center items-center p-6">
                 <div class="text-center mb-8">
-                  <h2 class="text-2xl font-bold mb-2">Scan Aadhaar QR</h2>
-                  <p class="text-slate-500 text-sm px-4">Scan physical card or e-Aadhaar.</p>
+                    <h2 class="text-2xl font-black mb-2">Scan Aadhaar QR</h2>
+                    <p class="text-slate-500 text-sm px-4">Hold the secure QR code steady within the frame.</p>
                 </div>
 
-                <div id="scan-ui-elements" class="relative w-64 h-64 border-4 border-dashed border-blue-400 rounded-3xl flex items-center justify-center bg-blue-50 mb-8 overflow-hidden group">
-                  <i data-lucide="qr-code" class="w-24 h-24 text-blue-300"></i>
-                  <div class="absolute top-0 left-0 w-full h-1 bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.8)] animate-scan"></div>
+                <div class="relative w-full max-w-[280px] aspect-square rounded-[2rem] overflow-hidden bg-slate-900 border-[6px] border-slate-200 shadow-inner mb-6">
+                    <div id="qr-reader" class="w-full h-full object-cover"></div>
+                    <div class="absolute inset-0 pointer-events-none border-2 border-blue-500/50 rounded-[1.6rem] m-4"></div>
+                    <div id="qr-scan-line" class="absolute top-0 left-0 w-full h-1 bg-blue-400 shadow-[0_0_20px_rgba(96,165,250,1)] animate-scan-line hidden"></div>
                 </div>
 
-                <div id="reader" class="w-full max-w-sm hidden mb-6 rounded-2xl overflow-hidden border-4 border-slate-200 bg-black"></div>
-
-                <button id="scan-btn" onclick="startScanner()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition-colors shadow-lg flex items-center justify-center gap-2 text-lg mb-3">
-                  <i data-lucide="scan-line" class="w-5 h-5"></i>
-                  Open Camera to Scan
-                </button>
-
-                <div id="scan-timer-msg" class="hidden text-rose-500 text-sm font-bold text-center mt-2 animate-pulse w-full bg-rose-50 p-3 rounded-lg border border-rose-200">
-                   <i data-lucide="timer" class="w-4 h-4 inline mb-0.5"></i> Auto-switching to manual capture in 10s...
-                </div>
-            </div>
-
-            <!-- STEP 2: ID CARD CAPTURE (FRONT & BACK) -->
-            <div id="step-capture-id" class="step-container flex-1 flex-col items-center">
-                <div class="w-full text-center mb-6">
-                  <h2 id="capture-title" class="text-2xl font-bold mb-2">Front of Aadhaar</h2>
-                  <p id="capture-desc" class="text-slate-500 text-sm px-2">Please capture a clear photo of the FRONT of the card (showing the face).</p>
+                <div id="qr-timer" class="text-rose-500 text-sm font-bold bg-rose-50 px-4 py-2 rounded-full mb-6 flex items-center gap-2">
+                    <i data-lucide="timer" class="w-4 h-4"></i> Auto-fallback in <span id="timer-count">10</span>s
                 </div>
 
-                <div class="relative w-full max-w-[300px] aspect-[1.58/1] rounded-2xl overflow-hidden bg-slate-900 border-4 border-slate-200 shadow-xl mb-6">
-                    <video id="id-webcam" autoplay playsinline class="w-full h-full object-cover"></video>
-                    <img id="front-image-preview" class="w-full h-full object-cover hidden absolute inset-0" />
-                    <img id="back-image-preview" class="w-full h-full object-cover hidden absolute inset-0" />
-                    <!-- Guide box -->
-                    <div id="id-guide" class="absolute inset-0 border-2 border-dashed border-white/60 m-4 rounded-xl pointer-events-none"></div>
-                </div>
-
-                <div class="flex gap-2 w-full max-w-[300px] mb-6 hidden" id="captured-thumbnails">
-                   <div class="flex-1 bg-slate-200 rounded-lg overflow-hidden h-20 border-2 border-slate-300 relative shadow-inner">
-                     <img id="thumb-front" class="w-full h-full object-cover" />
-                     <div class="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[10px] text-center font-bold py-0.5">FRONT</div>
-                   </div>
-                   <div class="flex-1 bg-slate-200 rounded-lg overflow-hidden h-20 border-2 border-slate-300 relative shadow-inner">
-                     <img id="thumb-back" class="w-full h-full object-cover hidden" />
-                     <div id="thumb-back-label" class="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[10px] text-center font-bold py-0.5 hidden">BACK</div>
-                   </div>
-                </div>
-
-                <button id="capture-front-btn" onclick="captureFront()" class="w-full mt-auto bg-slate-800 hover:bg-black text-white font-bold py-4 rounded-xl transition-colors shadow-lg flex items-center justify-center gap-2 text-lg">
-                  <i data-lucide="camera" class="w-6 h-6"></i> Capture Front
-                </button>
-                <button id="capture-back-btn" onclick="captureBack()" class="w-full mt-auto bg-slate-800 hover:bg-black text-white font-bold py-4 rounded-xl transition-colors shadow-lg flex items-center justify-center gap-2 text-lg hidden">
-                  <i data-lucide="camera" class="w-6 h-6"></i> Capture Back
-                </button>
-                <button id="process-id-btn" onclick="processIdUpload()" class="w-full mt-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition-colors shadow-lg items-center justify-center gap-2 text-lg hidden">
-                  <i data-lucide="upload-cloud" class="w-6 h-6"></i> Upload & Extract Details
+                <button onclick="fallbackToManual()" class="w-full bg-slate-100 text-slate-700 font-bold py-4 rounded-2xl hover:bg-slate-200 transition-colors flex items-center justify-center gap-2 border border-slate-200">
+                    Skip & Upload Manually
                 </button>
             </div>
 
-            <!-- STEP 2.5a: OCR PROCESSING (real Tesseract.js run, manual-capture path only) -->
-            <div id="step-ocr-processing" class="step-container flex-1 flex-col justify-center items-center">
-                <div id="ocr-spinner" class="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-6"></div>
-                <h2 class="text-2xl font-bold mb-2">Reading Your Card</h2>
-                <p id="ocr-status-text" class="text-slate-500 text-sm text-center px-4 mb-6">Starting OCR...</p>
-                <div class="w-full max-w-xs bg-slate-200 rounded-full h-2 overflow-hidden">
-                    <div id="ocr-progress-bar" class="bg-blue-600 h-2 rounded-full transition-all duration-200" style="width: 0%"></div>
-                </div>
-            </div>
-
-            <!-- STEP 2.5b: CONFIRM / CORRECT EXTRACTED DETAILS (manual-capture path only) -->
-            <div id="step-confirm-details" class="step-container flex-1 flex-col items-center">
-                <div class="w-full text-center mb-4">
-                  <h2 class="text-2xl font-bold mb-2">Confirm Details</h2>
-                  <p class="text-slate-500 text-sm px-2">OCR is a best-effort read of your card — please check these match your Aadhaar exactly before continuing.</p>
+            <div id="view-manual" class="view-section flex-1 flex-col p-6">
+                <div class="text-center mb-6 mt-4">
+                    <div class="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <i data-lucide="camera" class="text-amber-600 w-6 h-6"></i>
+                    </div>
+                    <h2 class="text-2xl font-black mb-1">Upload Aadhaar</h2>
+                    <p class="text-slate-500 text-sm">Please upload clear photos of the card.</p>
                 </div>
 
-                <div class="w-full flex flex-col gap-4 mb-6">
-                  <div>
-                    <label class="text-[10px] text-slate-500 font-bold uppercase tracking-wider block mb-1">Full Name</label>
-                    <input id="confirm-name" type="text" placeholder="As printed on Aadhaar" class="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-blue-500 focus:outline-none">
-                  </div>
-                  <div>
-                    <label class="text-[10px] text-slate-500 font-bold uppercase tracking-wider block mb-1">Date of Birth</label>
-                    <input id="confirm-dob" type="text" placeholder="DD-MM-YYYY" class="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-blue-500 focus:outline-none">
-                  </div>
-                  <div>
-                    <label class="text-[10px] text-slate-500 font-bold uppercase tracking-wider block mb-1">Address</label>
-                    <textarea id="confirm-address" rows="3" placeholder="As printed on the back of the card" class="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-blue-500 focus:outline-none"></textarea>
-                  </div>
+                <div class="space-y-4 flex-1">
+                    <!-- Front Upload -->
+                    <label class="block w-full relative cursor-pointer group">
+                        <input type="file" accept="image/*" capture="environment" id="file-front" class="hidden" onchange="handleFileUpload(event, 'front')">
+                        <div class="w-full h-32 border-2 border-dashed border-slate-300 rounded-2xl bg-slate-50 hover:bg-blue-50 hover:border-blue-300 transition-colors flex flex-col items-center justify-center overflow-hidden relative">
+                            <img id="preview-front" class="absolute inset-0 w-full h-full object-cover hidden z-10" />
+                            <div class="absolute inset-0 bg-black/40 z-20 hidden flex items-center justify-center" id="overlay-front">
+                                <i data-lucide="check-circle-2" class="text-white w-8 h-8"></i>
+                            </div>
+                            <i data-lucide="image-plus" class="text-slate-400 w-8 h-8 mb-2"></i>
+                            <span class="text-sm font-bold text-slate-600">Capture FRONT Side</span>
+                        </div>
+                    </label>
+
+                    <!-- Back Upload -->
+                    <label class="block w-full relative cursor-pointer group">
+                        <input type="file" accept="image/*" capture="environment" id="file-back" class="hidden" onchange="handleFileUpload(event, 'back')">
+                        <div class="w-full h-32 border-2 border-dashed border-slate-300 rounded-2xl bg-slate-50 hover:bg-blue-50 hover:border-blue-300 transition-colors flex flex-col items-center justify-center overflow-hidden relative">
+                            <img id="preview-back" class="absolute inset-0 w-full h-full object-cover hidden z-10" />
+                            <div class="absolute inset-0 bg-black/40 z-20 hidden flex items-center justify-center" id="overlay-back">
+                                <i data-lucide="check-circle-2" class="text-white w-8 h-8"></i>
+                            </div>
+                            <i data-lucide="image-plus" class="text-slate-400 w-8 h-8 mb-2"></i>
+                            <span class="text-sm font-bold text-slate-600">Capture BACK Side</span>
+                        </div>
+                    </label>
                 </div>
 
-                <button onclick="confirmDetails()" class="w-full mt-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition-colors shadow-lg flex items-center justify-center gap-2 text-lg">
-                  <i data-lucide="check" class="w-5 h-5"></i>
-                  Confirm & Continue
+                <button id="btn-extract-ocr" onclick="startOCR()" disabled class="w-full bg-slate-800 text-white font-bold py-4 rounded-2xl mt-6 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                    Extract Details <i data-lucide="chevron-right" class="w-5 h-5"></i>
                 </button>
             </div>
 
-            <!-- STEP 3: LIVE SELFIE -->
-            <div id="step-selfie" class="step-container flex-1 flex-col items-center">
-                <div class="w-full text-center mb-6">
-                  <h2 class="text-2xl font-bold mb-2">Live Verification</h2>
-                  <p class="text-slate-500 text-sm">Player must position their face to match with the ID.</p>
+            <div id="view-ocr-edit" class="view-section flex-1 flex-col p-6">
+                <div class="mb-6 mt-2">
+                    <h2 class="text-2xl font-black mb-1">Verify Details</h2>
+                    <p class="text-slate-500 text-sm">Review the extracted data and correct if necessary.</p>
                 </div>
 
-                <div class="relative w-64 h-80 rounded-[4rem] overflow-hidden bg-slate-900 border-8 border-slate-100 shadow-xl mb-8 flex items-center justify-center">
-                    <video id="webcam" autoplay playsinline muted class="w-full h-full object-cover transform -scale-x-100"></video>
-                    <img id="selfie-image-preview" class="w-full h-full object-cover transform -scale-x-100 hidden" />
-                    <!-- Face Guide -->
-                    <div class="absolute inset-0 border-[6px] border-white/30 rounded-[4rem] pointer-events-none m-4"></div>
-                </div>
-
-                <button id="selfie-capture-btn" onclick="captureSelfieAndProcess()" class="w-full mt-auto bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-xl transition-colors shadow-lg flex items-center justify-center gap-2 text-lg">
-                  <i data-lucide="camera" class="w-6 h-6"></i>
-                  Capture & Run AI Match
-                </button>
-            </div>
-
-            <!-- STEP 4: PROCESSING -->
-            <div id="step-processing" class="step-container flex-1 flex-col items-center justify-center">
-                <div class="relative w-32 h-32 mb-8">
-                  <svg class="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-                    <circle cx="50" cy="50" r="45" fill="none" stroke="#f1f5f9" stroke-width="8" />
-                    <circle id="progress-ring" cx="50" cy="50" r="45" fill="none" stroke="#3b82f6" stroke-width="8" stroke-linecap="round" stroke-dasharray="283" stroke-dashoffset="283" class="transition-all duration-300 ease-out" />
-                  </svg>
-                  <div class="absolute inset-0 flex items-center justify-center">
-                    <span id="progress-text" class="text-2xl font-bold text-blue-600">0%</span>
-                  </div>
-                </div>
-
-                <div class="space-y-4 w-full px-8">
-                  <div class="flex items-center gap-3 text-sm font-medium text-slate-600">
-                    <i id="chk-1" data-lucide="check-circle-2" class="w-5 h-5 text-slate-300"></i>
-                    <span id="txt-1">Extracting Facial Features...</span>
-                  </div>
-                  <div class="flex items-center gap-3 text-sm font-medium text-slate-600">
-                    <i id="chk-2" data-lucide="check-circle-2" class="w-5 h-5 text-slate-300"></i>
-                    <span id="txt-2">Running Neural Network Match...</span>
-                  </div>
-                  <div class="flex items-center gap-3 text-sm font-medium text-slate-600">
-                    <i id="chk-3" data-lucide="check-circle-2" class="w-5 h-5 text-slate-300"></i>
-                    <span id="txt-3">Verifying Age & Eligibility...</span>
-                  </div>
-                </div>
-            </div>
-
-            <!-- STEP 5: RESULT -->
-            <div id="step-result" class="step-container flex-1 flex-col items-center pt-2 pb-4">
-                <div id="result-status-icon" class="mb-2"></div>
-                <h2 id="result-status-title" class="text-2xl font-black text-slate-800 mb-1"></h2>
-                <p id="result-status-desc" class="text-slate-500 mb-6 text-sm"></p>
-
-                <div class="w-full bg-slate-50 border border-slate-200 rounded-2xl p-5 mb-6 shadow-sm flex flex-col gap-4">
-
-                  <div class="flex justify-between items-center border-b border-slate-200 pb-3">
+                <div class="space-y-4 flex-1">
                     <div>
-                      <p class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Name</p>
-                      <p id="res-name" class="font-bold text-slate-800 text-lg"></p>
+                        <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Full Name</label>
+                        <input type="text" id="edit-name" class="w-full bg-white border-2 border-slate-200 rounded-xl px-4 py-3 font-semibold text-slate-800 focus:border-blue-500 focus:ring-0 outline-none transition-colors">
                     </div>
-                    <div class="text-right">
-                      <p class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">AI Face Match</p>
-                      <p id="res-match-status" class="font-bold"></p>
+                    <div>
+                        <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Date of Birth (DD/MM/YYYY)</label>
+                        <input type="text" id="edit-dob" placeholder="15/08/2004" class="w-full bg-white border-2 border-slate-200 rounded-xl px-4 py-3 font-semibold text-slate-800 focus:border-blue-500 focus:ring-0 outline-none transition-colors">
                     </div>
-                  </div>
-
-                  <div class="border-b border-slate-200 pb-3">
-                      <p class="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">Exact Age (As of Today)</p>
-                      <div class="flex gap-2 w-full">
-                         <div class="bg-white rounded p-1 flex-1 text-center shadow-sm border border-slate-200">
-                            <span id="res-years" class="block text-lg font-black text-slate-700"></span>
-                            <span class="text-[9px] text-slate-500 font-bold uppercase">Years</span>
-                         </div>
-                         <div class="bg-white rounded p-1 flex-1 text-center shadow-sm border border-slate-200">
-                            <span id="res-months" class="block text-lg font-black text-slate-700"></span>
-                            <span class="text-[9px] text-slate-500 font-bold uppercase">Months</span>
-                         </div>
-                         <div class="bg-white rounded p-1 flex-1 text-center shadow-sm border border-slate-200">
-                            <span id="res-days" class="block text-lg font-black text-slate-700"></span>
-                            <span class="text-[9px] text-slate-500 font-bold uppercase">Days</span>
-                         </div>
-                      </div>
-                  </div>
-
-                  <div>
-                    <p class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Address Extracted</p>
-                    <p id="res-address" class="font-semibold text-slate-700 text-xs mt-1 leading-relaxed"></p>
-                  </div>
-
+                    <div>
+                        <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Address</label>
+                        <textarea id="edit-address" rows="3" class="w-full bg-white border-2 border-slate-200 rounded-xl px-4 py-3 font-medium text-sm text-slate-700 focus:border-blue-500 focus:ring-0 outline-none transition-colors"></textarea>
+                    </div>
                 </div>
 
-                <button onclick="resetApp()" class="w-full mt-auto bg-slate-900 hover:bg-black text-white font-bold py-4 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2">
-                  <i data-lucide="qr-code" class="w-5 h-5"></i>
-                  Scan Next Player
+                <button onclick="confirmOCRData()" class="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-bold py-4 rounded-2xl mt-6 shadow-[0_8px_30px_rgb(16,185,129,0.3)] flex items-center justify-center gap-2">
+                    <i data-lucide="check" class="w-5 h-5"></i> Confirm & Continue
                 </button>
+            </div>
+
+            <div id="view-selfie" class="view-section flex-1 flex-col items-center justify-center p-6">
+                <div class="text-center mb-6">
+                    <h2 class="text-2xl font-black mb-2">Live Verification</h2>
+                    <p class="text-slate-500 text-sm px-4">Position face clearly in the circle.</p>
+                </div>
+
+                <div class="relative w-full max-w-[260px] aspect-[3/4] rounded-full overflow-hidden bg-slate-900 border-8 border-slate-100 shadow-2xl mb-8 flex items-center justify-center">
+                    <video id="selfie-video" autoplay playsinline muted class="w-full h-full object-cover transform -scale-x-100"></video>
+                    <div class="absolute inset-0 border-[4px] border-white/20 rounded-full m-3 pointer-events-none"></div>
+                </div>
+
+                <button onclick="captureSelfie()" class="w-full bg-slate-900 text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-3 text-lg shadow-xl active:scale-[0.98]">
+                    <div class="w-6 h-6 rounded-full border-2 border-white flex items-center justify-center p-0.5">
+                        <div class="w-full h-full bg-white rounded-full"></div>
+                    </div>
+                    Capture Photo
+                </button>
+            </div>
+
+            <div id="view-processing" class="view-section flex-1 flex-col items-center justify-center p-6">
+                <div class="relative w-32 h-32 mb-10">
+                    <svg class="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                        <circle cx="50" cy="50" r="45" fill="none" stroke="#f1f5f9" stroke-width="8" />
+                        <circle id="progress-ring" cx="50" cy="50" r="45" fill="none" stroke="#3b82f6" stroke-width="8" stroke-linecap="round" stroke-dasharray="283" stroke-dashoffset="283" class="transition-all duration-300 ease-out" />
+                    </svg>
+                    <div class="absolute inset-0 flex items-center justify-center">
+                        <span id="progress-text" class="text-2xl font-black text-blue-600">0%</span>
+                    </div>
+                </div>
+
+                <div class="space-y-4 w-full max-w-xs">
+                    <div class="flex items-center gap-3 text-sm font-semibold">
+                        <i id="proc-icon-1" data-lucide="loader-2" class="w-5 h-5 text-blue-500 animate-spin"></i>
+                        <span id="proc-text-1" class="text-slate-800">Analyzing Photo Quality...</span>
+                    </div>
+                    <div class="flex items-center gap-3 text-sm font-semibold opacity-40 transition-opacity" id="proc-step-2">
+                        <i id="proc-icon-2" data-lucide="loader-2" class="w-5 h-5 text-blue-500"></i>
+                        <span id="proc-text-2" class="text-slate-800">Running Face Match AI...</span>
+                    </div>
+                    <div class="flex items-center gap-3 text-sm font-semibold opacity-40 transition-opacity" id="proc-step-3">
+                        <i id="proc-icon-3" data-lucide="loader-2" class="w-5 h-5 text-blue-500"></i>
+                        <span id="proc-text-3" class="text-slate-800">Calculating Exact Age...</span>
+                    </div>
+                </div>
+            </div>
+
+            <div id="view-result" class="view-section flex-1 flex-col items-center pt-6 pb-6 px-4">
+                
+                <!-- Dynamic Status Header -->
+                <div id="res-header" class="flex flex-col items-center mb-6 w-full">
+                    <div id="res-icon-wrapper" class="w-20 h-20 rounded-full flex items-center justify-center mb-3 shadow-lg">
+                        <i id="res-icon" data-lucide="shield-check" class="w-10 h-10 text-white"></i>
+                    </div>
+                    <h2 id="res-title" class="text-3xl font-black tracking-tight mb-1">Verified</h2>
+                    <div class="bg-white px-4 py-1.5 rounded-full shadow-sm border border-slate-100 flex items-center gap-2 mt-2">
+                        <span class="text-[10px] font-bold uppercase text-slate-400">Match Score</span>
+                        <span id="res-score" class="text-sm font-black">98.4%</span>
+                    </div>
+                </div>
+
+                <!-- Strict Data Card -->
+                <div class="w-full bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 overflow-hidden mb-6 flex-shrink-0">
+                    
+                    <div class="p-4 border-b border-slate-100 flex items-start gap-4">
+                        <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0 mt-1">
+                            <i data-lucide="user" class="w-5 h-5 text-slate-500"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Name</p>
+                            <p id="res-data-name" class="text-lg font-black text-slate-800 truncate">Rahul Sharma</p>
+                        </div>
+                    </div>
+
+                    <div class="p-4 border-b border-slate-100 bg-slate-50/50">
+                        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2">Age (As on Today)</p>
+                        <div class="flex gap-2 w-full mb-3">
+                            <div class="bg-white border border-slate-200 rounded-xl p-2 flex-1 text-center shadow-sm">
+                                <span id="res-data-years" class="block text-xl font-black text-indigo-600">21</span>
+                                <span class="text-[9px] text-slate-500 font-bold uppercase">Years</span>
+                            </div>
+                            <div class="bg-white border border-slate-200 rounded-xl p-2 flex-1 text-center shadow-sm">
+                                <span id="res-data-months" class="block text-xl font-black text-indigo-600">4</span>
+                                <span class="text-[9px] text-slate-500 font-bold uppercase">Months</span>
+                            </div>
+                            <div class="bg-white border border-slate-200 rounded-xl p-2 flex-1 text-center shadow-sm">
+                                <span id="res-data-days" class="block text-xl font-black text-indigo-600">17</span>
+                                <span class="text-[9px] text-slate-500 font-bold uppercase">Days</span>
+                            </div>
+                        </div>
+                        <p class="text-xs text-slate-600 font-medium">Date of Birth: <span id="res-data-dob" class="font-bold text-slate-800">15-08-2004</span></p>
+                    </div>
+
+                    <div class="p-4 flex items-start gap-4">
+                        <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0 mt-1">
+                            <i data-lucide="map-pin" class="w-5 h-5 text-slate-500"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Address</p>
+                            <p id="res-data-address" class="text-sm font-medium text-slate-700 leading-snug line-clamp-3">Kolkata, West Bengal</p>
+                        </div>
+                    </div>
+                </div>
+
+                <button onclick="finishVerification()" class="w-full mt-auto bg-slate-900 hover:bg-black text-white font-bold py-4 rounded-2xl transition-all shadow-xl active:scale-[0.98]">
+                    Finish & Clear Memory
+                </button>
+                <p class="text-[9px] text-slate-400 font-medium text-center mt-3 uppercase tracking-widest"><i data-lucide="trash-2" class="w-3 h-3 inline pb-0.5"></i> All local data will be securely erased</p>
             </div>
 
         </div>
     </div>
 
-    <!-- Hidden Canvases for AI Processing -->
-    <canvas id="ref-canvas" class="hidden"></canvas>
-    <canvas id="selfie-canvas" class="hidden"></canvas>
+    <!-- Hidden Canvases for Logic -->
+    <canvas id="canvas-ref" class="hidden"></canvas>
+    <canvas id="canvas-selfie" class="hidden"></canvas>
+    <img id="img-ref-store" class="hidden">
+    <img id="img-selfie-store" class="hidden">
 
     <script>
         lucide.createIcons();
 
-        // App State
-        let extractedData = { name: "Unknown", dob: "01-01-2000", address: "Not found" };
-        let videoStream = null;
-        let html5QrCode = null;
-        let aiModelsLoaded = false;
-        let scanTimer = null;
-        let qrDataExtracted = false; // Tracks if we need the Back side and OCR
+        // Strict App State
+        let state = {
+            name: '',
+            dob: '',
+            address: '',
+            frontLoaded: false,
+            backLoaded: false,
+            qrTimer: null,
+            videoStream: null,
+            html5QrCode: null
+        };
 
-        // AI Threshold (Lower means stricter match. 0.6 is industry standard)
-        const FACE_MATCH_THRESHOLD = 0.55;
-
-        // 1. INITIALIZE REAL AI MODELS
-        async function loadAIModels() {
-            // Show bypass button after 5 seconds if models are taking too long to load
-            const bypassTimeout = setTimeout(() => {
-                document.getElementById('ai-bypass-btn').classList.remove('hidden');
-            }, 5000);
-
+        async function loadAI() {
             try {
                 const MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights/';
                 await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
                 await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
                 await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
-
-                clearTimeout(bypassTimeout);
-                aiModelsLoaded = true;
-                showStep('consent');
+                
+                document.getElementById('model-loader').classList.add('hidden');
+                document.getElementById('btn-start').classList.remove('hidden');
+                document.getElementById('btn-start').classList.add('flex');
             } catch (error) {
-                console.error("AI Load Error:", error);
-                clearTimeout(bypassTimeout);
-                document.getElementById('loading-spinner').classList.add('hidden');
-                document.getElementById('loading-title').innerText = "Network Error";
-                document.getElementById('loading-desc').innerText = "Failed to download AI models. Check internet connection.";
-                document.getElementById('ai-bypass-btn').classList.remove('hidden');
+                console.error("AI Load Error", error);
+                alert("Failed to load AI Engine. Check internet connection.");
             }
         }
+        window.onload = loadAI;
 
-        // Allow testing without AI loading blocking the app
-        function bypassAILoad() {
-            aiModelsLoaded = false;
-            showStep('consent');
-        }
-
-        // Start loading on boot
-        window.onload = loadAIModels;
-
-        // ---- CONSENT GATE ----
-        let consentGivenAt = null;
-
-        function toggleConsentButton() {
-            const checked = document.getElementById('consent-checkbox').checked;
-            const btn = document.getElementById('consent-continue-btn');
-            btn.disabled = !checked;
-            if (checked) {
-                btn.classList.remove('bg-slate-300', 'text-slate-500', 'cursor-not-allowed');
-                btn.classList.add('bg-blue-600', 'hover:bg-blue-700', 'text-white');
-            } else {
-                btn.classList.add('bg-slate-300', 'text-slate-500', 'cursor-not-allowed');
-                btn.classList.remove('bg-blue-600', 'hover:bg-blue-700', 'text-white');
-            }
-        }
-
-        function acceptConsent() {
-            if (!document.getElementById('consent-checkbox').checked) return;
-            consentGivenAt = new Date().toISOString();
-
-            // Log the consent event on its own, separate from the verification result,
-            // so there's an audit record even if the player abandons the flow afterward.
-            if (window.firebaseBridge) {
-                window.firebaseBridge.logConsent({
-                    consentGivenAt,
-                    consentText: "aadhaar-scan-and-selfie-match-v1"
-                });
-                window.firebaseBridge.trackEvent('consent_given', {});
-            }
-
-            showStep('scan');
-        }
-
-        function showStep(stepId) {
-            document.querySelectorAll('.step-container').forEach(el => el.classList.remove('active'));
-            document.getElementById('step-' + stepId).classList.add('active');
-        }
-
-        // 2. REAL QR PARSER WITH 10-SECOND TIMEOUT
-        function startScanner() {
-            document.getElementById('scan-ui-elements').classList.add('hidden');
-            document.getElementById('reader').classList.remove('hidden');
-            document.getElementById('scan-timer-msg').classList.remove('hidden');
-
-            const scanBtn = document.getElementById('scan-btn');
-            scanBtn.innerHTML = `<i data-lucide="loader-2" class="w-5 h-5 animate-spin"></i> Starting Camera...`;
-            scanBtn.disabled = true;
+        function showView(viewId) {
+            document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
+            document.getElementById(viewId).classList.add('active');
             lucide.createIcons();
+        }
 
-            html5QrCode = new Html5Qrcode("reader");
+        function startWorkflow() {
+            if(window.firebaseAnalytics) {
+                // Using try-catch to prevent breaking if analytics fails
+                try { window.firebaseBridge?.trackEvent('verification_started'); } catch(e){}
+            }
+            showView('view-scan');
+            startScanner();
+        }
 
-            const config = {
-                fps: 10,
-                qrbox: { width: 250, height: 250 },
-                aspectRatio: 1.0,
-                disableFlip: false
-            };
+        function startScanner() {
+            state.html5QrCode = new Html5Qrcode("qr-reader");
+            const config = { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 };
+            
+            document.getElementById('qr-scan-line').classList.remove('hidden');
+            let timeLeft = 10;
+            document.getElementById('timer-count').innerText = timeLeft;
 
-            const videoConstraints = {
-                facingMode: "environment"
-            };
-
-            html5QrCode.start(videoConstraints, config,
+            state.html5QrCode.start({ facingMode: "environment" }, config,
                 (decodedText) => {
-                    clearTimeout(scanTimer);
-                    html5QrCode.stop().then(() => {
-                        resetScannerUI();
-                        qrDataExtracted = true;
-                        parseAadhaarData(decodedText);
+                    // Success
+                    clearTimeout(state.qrTimer);
+                    state.html5QrCode.stop().then(() => {
+                        processQRData(decodedText);
                     });
                 },
-                (errorMessage) => { /* Ignore constant read errors */ }
+                (err) => { /* ignore read errors */ }
             ).then(() => {
-                scanBtn.innerHTML = `<i data-lucide="scan-line" class="w-5 h-5"></i> Scanning... Point at QR`;
-                lucide.createIcons();
-
-                // Start 10-Second Countdown to Fallback
-                scanTimer = setTimeout(() => {
-                    html5QrCode.stop().then(() => {
-                        resetScannerUI();
-                        qrDataExtracted = false;
-                        goToIDCapture(); // Switch to Dual Image Capture mode
-                    }).catch(err => console.log(err));
-                }, 10000);
-
-            }).catch((err) => {
-                console.error(err);
-                resetScannerUI();
-                qrDataExtracted = false;
-                goToIDCapture();
+                // Scanner started, begin 10s countdown
+                state.qrTimer = setInterval(() => {
+                    timeLeft--;
+                    document.getElementById('timer-count').innerText = timeLeft;
+                    if(timeLeft <= 0) {
+                        clearInterval(state.qrTimer);
+                        fallbackToManual();
+                    }
+                }, 1000);
+            }).catch(err => {
+                console.log("Scanner start failed", err);
+                fallbackToManual();
             });
         }
 
-        function parseAadhaarData(qrText) {
-            try {
-                let nameMatch = qrText.match(/name="([^"]+)"/i);
-                let dobMatch = qrText.match(/dob="([^"]+)"/i) || qrText.match(/yob="([^"]+)"/i);
-                let coMatch = qrText.match(/co="([^"]+)"/i);
-                let distMatch = qrText.match(/dist="([^"]+)"/i);
-                let stateMatch = qrText.match(/state="([^"]+)"/i);
+        function fallbackToManual() {
+            if(state.html5QrCode) {
+                try { state.html5QrCode.stop(); } catch(e){}
+            }
+            clearInterval(state.qrTimer);
+            showView('view-manual');
+        }
 
-                if(nameMatch) extractedData.name = nameMatch[1];
-                if(dobMatch) {
-                    let d = dobMatch[1];
-                    extractedData.dob = d.length === 4 ? `01-01-${d}` : d;
+        function processQRData(xmlText) {
+            try {
+                // Naive XML extraction since secure QR is complex.
+                // Mask Aadhaar if found
+                const aadharMatch = xmlText.match(/uid="(\d{12})"/i);
+                if(aadharMatch) {
+                    // We DO NOT store this.
+                    xmlText = xmlText.replace(aadharMatch[1], "XXXX-XXXX-XXXX");
                 }
 
+                let name = xmlText.match(/name="([^"]+)"/i);
+                let dob = xmlText.match(/dob="([^"]+)"/i) || xmlText.match(/yob="([^"]+)"/i);
+                let dist = xmlText.match(/dist="([^"]+)"/i);
+                let stateMatch = xmlText.match(/state="([^"]+)"/i);
+
+                if(name) state.name = name[1];
+                if(dob) {
+                    let d = dob[1];
+                    state.dob = d.length === 4 ? `01-01-${d}` : d; 
+                }
+                
                 let addr = [];
-                if(coMatch) addr.push(coMatch[1]);
-                if(distMatch) addr.push(distMatch[1]);
+                if(dist) addr.push(dist[1]);
                 if(stateMatch) addr.push(stateMatch[1]);
-                if(addr.length > 0) extractedData.address = addr.join(", ");
+                state.address = addr.join(", ");
 
+                // Secure QR photos are compressed JP2000 binaries. 
+                // Since browser JS cannot natively decode JP2000, if we reach here via QR, 
+                // we still need a reference photo for the AI.
+                // We will route them to capture ONLY the front photo for AI reference.
+                showView('view-manual');
+                document.getElementById('file-back').parentElement.style.display = 'none'; // Hide back upload
+                document.querySelector('#view-manual p').innerText = "QR Scanned! Please upload the FRONT of the card to extract the reference photo.";
+                
+                // Prefill state so OCR step is skipped later
+                state.backLoaded = true; // Pretend back is loaded
+                
             } catch(e) {
-                console.log("Not standard XML, mapping raw text");
+                fallbackToManual();
             }
-            goToIDCapture();
         }
 
-        function resetScannerUI() {
-            document.getElementById('scan-ui-elements').classList.remove('hidden');
-            document.getElementById('reader').classList.add('hidden');
-            document.getElementById('scan-timer-msg').classList.add('hidden');
-            const scanBtn = document.getElementById('scan-btn');
-            scanBtn.disabled = false;
-            scanBtn.innerHTML = `<i data-lucide="scan-line" class="w-5 h-5"></i> Open Camera to Scan`;
+        function handleFileUpload(event, side) {
+            const file = event.target.files[0];
+            if(!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = document.getElementById(`preview-${side}`);
+                img.src = e.target.result;
+                img.classList.remove('hidden');
+                document.getElementById(`overlay-${side}`).classList.remove('hidden');
+                
+                if(side === 'front') {
+                    state.frontLoaded = true;
+                    document.getElementById('img-ref-store').src = e.target.result; // Store for AI
+                }
+                if(side === 'back') state.backLoaded = true;
+
+                if(state.frontLoaded && state.backLoaded) {
+                    document.getElementById('btn-extract-ocr').disabled = false;
+                }
+            };
+            reader.readAsDataURL(file);
+        }
+
+        async function startOCR() {
+            // If QR already populated details, skip OCR text extraction
+            if(state.name !== '') {
+                populateEditScreen();
+                return;
+            }
+
+            const btn = document.getElementById('btn-extract-ocr');
+            btn.innerHTML = `<i data-lucide="loader-2" class="w-5 h-5 animate-spin"></i> Processing OCR...`;
+            btn.disabled = true;
             lucide.createIcons();
+
+            try {
+                // Tesseract on Front
+                const frontResult = await Tesseract.recognize(document.getElementById('preview-front').src, 'eng');
+                const frontText = frontResult.data.text;
+                
+                // Tesseract on Back
+                const backResult = await Tesseract.recognize(document.getElementById('preview-back').src, 'eng');
+                const backText = backResult.data.text;
+
+                parseOCRData(frontText, backText);
+                populateEditScreen();
+
+            } catch (err) {
+                console.error("OCR Failed", err);
+                alert("OCR extraction failed. Please enter details manually.");
+                populateEditScreen(); // Let them enter manually
+            }
         }
 
-        // 3. CAPTURE FRONT AND BACK OF ID
-        function goToIDCapture() {
-            showStep('capture-id');
-            document.getElementById('captured-thumbnails').classList.add('hidden');
+        function parseOCRData(frontText, backText) {
+            // DOB Regex
+            const dobMatch = frontText.match(/(?:DOB|Birth|YOB).*?(\d{2}[/-]\d{2}[/-]\d{4}|\d{4})/i) || frontText.match(/(\d{2}[/-]\d{2}[/-]\d{4})/);
+            if(dobMatch) {
+                let d = dobMatch[1].replace(/\//g, '-');
+                state.dob = d.length === 4 ? `01-01-${d}` : d;
+            }
 
-            document.getElementById('front-image-preview').classList.add('hidden');
-            document.getElementById('back-image-preview').classList.add('hidden');
-            document.getElementById('thumb-back').classList.add('hidden');
-            document.getElementById('thumb-back-label').classList.add('hidden');
-            document.getElementById('id-webcam').classList.remove('hidden');
+            // Name Heuristic (Filter out typical Aadhaar words, grab longest alpha line)
+            const lines = frontText.split('\n').map(l => l.trim()).filter(l => l.length > 3);
+            const noise = /government|india|dob|male|female|aadhaar|father|issue|download/i;
+            const nameCandidates = lines.filter(l => !/\d/.test(l) && !noise.test(l) && /^[A-Z][a-z\sA-Z]+$/.test(l));
+            if(nameCandidates.length > 0) state.name = nameCandidates[0];
 
-            document.getElementById('capture-front-btn').classList.remove('hidden');
-            document.getElementById('capture-back-btn').classList.add('hidden');
-            document.getElementById('process-id-btn').classList.add('hidden');
-
-            document.getElementById('capture-title').innerText = "Front of Aadhaar";
-            document.getElementById('capture-desc').innerText = "Capture the FRONT of the card (showing the photo).";
-
-            startCamera('id-webcam', 'environment');
+            // Address Heuristic
+            const bLines = backText.split('\n').map(l => l.trim());
+            const addrStart = bLines.findIndex(l => /address/i.test(l));
+            if(addrStart !== -1) {
+                let addrBlock = bLines.slice(addrStart).join(', ').replace(/^address[:\s,]*/i, '').trim();
+                // Clean up string logic
+                state.address = addrBlock.substring(0, 80); // Take reasonable chunk
+            }
         }
 
-        function startCamera(videoId, facing) {
-            const video = document.getElementById(videoId);
-            navigator.mediaDevices.getUserMedia({ video: { facingMode: facing } })
+        function populateEditScreen() {
+            document.getElementById('edit-name').value = state.name || '';
+            document.getElementById('edit-dob').value = state.dob || '';
+            document.getElementById('edit-address').value = state.address || '';
+            showView('view-ocr-edit');
+        }
+
+        function confirmOCRData() {
+            state.name = document.getElementById('edit-name').value.trim();
+            state.dob = document.getElementById('edit-dob').value.trim();
+            state.address = document.getElementById('edit-address').value.trim();
+
+            if(!state.name || !state.dob) {
+                alert("Name and Date of Birth are mandatory.");
+                return;
+            }
+            
+            showView('view-selfie');
+            startSelfieCamera();
+        }
+
+        function startSelfieCamera() {
+            const video = document.getElementById('selfie-video');
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
                 .then(stream => {
-                    videoStream = stream;
+                    state.videoStream = stream;
                     video.srcObject = stream;
                 })
                 .catch(err => {
-                    console.error("Camera error:", err);
-                    alert("Camera blocked. App cannot proceed without camera access.");
+                    console.error("Selfie camera blocked", err);
+                    alert("Camera permission denied. Cannot proceed with verification.");
                 });
         }
 
-        function captureFront() {
-            const video = document.getElementById('id-webcam');
-            const canvas = document.getElementById('ref-canvas');
+        function captureSelfie() {
+            const video = document.getElementById('selfie-video');
+            const canvas = document.getElementById('canvas-selfie');
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
-            canvas.getContext('2d').drawImage(video, 0, 0);
-
-            const dataUrl = canvas.toDataURL('image/jpeg');
-            document.getElementById('front-image-preview').src = dataUrl;
-            document.getElementById('thumb-front').src = dataUrl;
-
-            document.getElementById('captured-thumbnails').classList.remove('hidden');
-            document.getElementById('captured-thumbnails').classList.add('flex');
-
-            if (qrDataExtracted) {
-                document.getElementById('id-webcam').classList.add('hidden');
-                document.getElementById('front-image-preview').classList.remove('hidden');
-                document.getElementById('capture-front-btn').classList.add('hidden');
-
-                const processBtn = document.getElementById('process-id-btn');
-                processBtn.classList.remove('hidden');
-                processBtn.classList.add('flex');
-                processBtn.innerHTML = `<i data-lucide="check" class="w-6 h-6"></i> Proceed to Live Selfie`;
-                lucide.createIcons();
-
-                stopCamera();
-            } else {
-                document.getElementById('capture-title').innerText = "Back of Aadhaar";
-                document.getElementById('capture-desc').innerText = "Now capture the BACK of the card.";
-                document.getElementById('capture-front-btn').classList.add('hidden');
-                document.getElementById('capture-back-btn').classList.remove('hidden');
-                document.getElementById('capture-back-btn').classList.add('flex');
-            }
-        }
-
-        function captureBack() {
-            const video = document.getElementById('id-webcam');
-            const canvas = document.createElement('canvas');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            canvas.getContext('2d').drawImage(video, 0, 0);
-
-            const dataUrl = canvas.toDataURL('image/jpeg');
-            document.getElementById('back-image-preview').src = dataUrl;
-            document.getElementById('thumb-back').src = dataUrl;
-
-            document.getElementById('thumb-back').classList.remove('hidden');
-            document.getElementById('thumb-back-label').classList.remove('hidden');
-
-            document.getElementById('id-webcam').classList.add('hidden');
-            document.getElementById('back-image-preview').classList.remove('hidden');
-
-            document.getElementById('capture-back-btn').classList.add('hidden');
-            document.getElementById('process-id-btn').classList.remove('hidden');
-            document.getElementById('process-id-btn').classList.add('flex');
-
-            stopCamera();
-        }
-
-        function processIdUpload() {
-            if (qrDataExtracted) {
-                // QR gave us reliable structured data already; nothing to OCR.
-                goToSelfie();
-            } else {
-                extractAadhaarOCR();
-            }
-        }
-
-        // ---- REAL OCR (Tesseract.js) for the manual front/back capture path ----
-
-        function updateOcrStatus(msg, pct) {
-            document.getElementById('ocr-status-text').innerText = msg;
-            document.getElementById('ocr-progress-bar').style.width = Math.min(100, Math.max(0, pct)) + '%';
-        }
-
-        async function extractAadhaarOCR() {
-            showStep('ocr-processing');
-            updateOcrStatus('Starting OCR...', 5);
-
-            const frontDataUrl = document.getElementById('front-image-preview').src;
-            const backDataUrl = document.getElementById('back-image-preview').src;
-
-            let frontText = '', backText = '';
-
-            try {
-                const frontResult = await Tesseract.recognize(frontDataUrl, 'eng', {
-                    logger: (m) => {
-                        if (m.status === 'recognizing text') {
-                            updateOcrStatus('Reading front of card...', 10 + Math.round(m.progress * 35));
-                        }
-                    }
-                });
-                frontText = frontResult.data.text || '';
-            } catch (err) {
-                console.error('OCR (front) failed:', err);
-            }
-
-            try {
-                const backResult = await Tesseract.recognize(backDataUrl, 'eng', {
-                    logger: (m) => {
-                        if (m.status === 'recognizing text') {
-                            updateOcrStatus('Reading back of card...', 50 + Math.round(m.progress * 40));
-                        }
-                    }
-                });
-                backText = backResult.data.text || '';
-            } catch (err) {
-                console.error('OCR (back) failed:', err);
-            }
-
-            updateOcrStatus('Parsing details...', 95);
-
-            const { name, dob } = parseFrontText(frontText);
-            const address = parseBackText(backText);
-
-            // Prefill the confirm screen with best-effort OCR results. Nothing here is trusted
-            // automatically — the operator must review and correct these before the flow continues,
-            // since OCR errors on ID text could otherwise misidentify someone for eligibility purposes.
-            document.getElementById('confirm-name').value = name || '';
-            document.getElementById('confirm-dob').value = dob || '';
-            document.getElementById('confirm-address').value = address || '';
-
-            updateOcrStatus('Done', 100);
-            setTimeout(() => showStep('confirm-details'), 350);
-        }
-
-        // Heuristic parser for the front of the card: looks for a DOB/YOB pattern, then picks
-        // the most "name-like" line (letters/spaces only, no boilerplate keywords) as the name.
-        function parseFrontText(text) {
-            const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-
-            let dob = null;
-            const dobLabelMatch = text.match(/(?:DOB|Date of Birth|D\.O\.B\.?)[:\s]*([0-3]?\d[\/\-][01]?\d[\/\-]\d{4})/i);
-            if (dobLabelMatch) {
-                dob = normalizeDate(dobLabelMatch[1]);
-            } else {
-                const anyDateMatch = text.match(/([0-3]?\d[\/\-][01]?\d[\/\-]\d{4})/);
-                if (anyDateMatch) dob = normalizeDate(anyDateMatch[1]);
-            }
-            if (!dob) {
-                const yobMatch = text.match(/(?:YOB|Year of Birth)[:\s]*(\d{4})/i);
-                if (yobMatch) dob = `01-01-${yobMatch[1]}`;
-            }
-
-            const noiseWords = /government|india|male|female|dob|date of birth|year of birth|unique identification|authority|aadhaar|address|govt|issue|download/i;
-            const nameCandidates = lines.filter(l =>
-                l.length >= 3 && l.length <= 40 &&
-                !/\d/.test(l) &&
-                !noiseWords.test(l) &&
-                /^[A-Za-z.\s]+$/.test(l)
-            );
-
-            return {
-                name: nameCandidates.length ? nameCandidates[0] : null,
-                dob
-            };
-        }
-
-        // Heuristic parser for the back of the card: grabs the block of lines starting at the
-        // "Address" label (if found) and ending at the 6-digit PIN code line.
-        function parseBackText(text) {
-            const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-            if (!lines.length) return null;
-
-            let start = lines.findIndex(l => /address/i.test(l));
-            let block = start !== -1 ? lines.slice(start) : lines;
-
-            const pinIdx = block.findIndex(l => /\b\d{6}\b/.test(l));
-            if (pinIdx !== -1) block = block.slice(0, pinIdx + 1);
-
-            const address = block.join(', ').replace(/^address[:\s,]*/i, '').trim();
-            return address || null;
-        }
-
-        function normalizeDate(str) {
-            const parts = str.split(/[\/\-]/);
-            if (parts.length !== 3) return null;
-            const day = parts[0].padStart(2, '0');
-            const month = parts[1].padStart(2, '0');
-            const year = parts[2];
-            return `${day}-${month}-${year}`;
-        }
-
-        function confirmDetails() {
-            const name = document.getElementById('confirm-name').value.trim();
-            const dob = document.getElementById('confirm-dob').value.trim();
-            const address = document.getElementById('confirm-address').value.trim();
-
-            if (!name || !dob) {
-                alert('Please fill in at least Name and Date of Birth before continuing.');
-                return;
-            }
-            if (!/^\d{1,2}-\d{1,2}-\d{4}$/.test(dob)) {
-                alert('Please enter Date of Birth in DD-MM-YYYY format.');
-                return;
-            }
-
-            extractedData = { name, dob, address: address || 'Not provided' };
-            goToSelfie();
-        }
-
-        // 4. CAPTURE LIVE SELFIE
-        function goToSelfie() {
-            showStep('selfie');
-            startCamera('webcam', 'user');
-        }
-
-        function captureSelfieAndProcess() {
-            const video = document.getElementById('webcam');
-            const canvas = document.getElementById('selfie-canvas');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
+            
+            // Mirror flip matching CSS
             const ctx = canvas.getContext('2d');
             ctx.translate(canvas.width, 0);
             ctx.scale(-1, 1);
             ctx.drawImage(video, 0, 0);
 
-            const img = document.getElementById('selfie-image-preview');
-            img.src = canvas.toDataURL('image/jpeg');
-            video.classList.add('hidden');
-            img.classList.remove('hidden');
+            document.getElementById('img-selfie-store').src = canvas.toDataURL('image/jpeg', 0.8);
+            
+            // Stop Camera
+            if (state.videoStream) {
+                state.videoStream.getTracks().forEach(track => track.stop());
+                state.videoStream = null;
+            }
 
-            stopCamera();
-            runAIEngine();
+            processAI();
         }
 
-        function stopCamera() {
-            if (videoStream) {
-                videoStream.getTracks().forEach(track => track.stop());
-                videoStream = null;
+        async function processAI() {
+            showView('view-processing');
+            
+            let pRing = document.getElementById('progress-ring');
+            let pText = document.getElementById('progress-text');
+            const circ = 2 * Math.PI * 45;
+
+            // Fake UI progression for UX
+            let pct = 0;
+            const uiInterval = setInterval(() => {
+                pct += 4;
+                if(pct > 90) pct = 90; // hold at 90 until real AI finishes
+                pRing.style.strokeDashoffset = circ - (pct / 100) * circ;
+                pText.innerText = `${pct}%`;
+
+                if(pct > 20) {
+                    document.getElementById('proc-icon-1').classList.replace('animate-spin', 'hidden');
+                    document.getElementById('proc-icon-1').outerHTML = `<i data-lucide="check-circle-2" class="w-5 h-5 text-emerald-500"></i>`;
+                    document.getElementById('proc-step-2').classList.remove('opacity-40');
+                    document.getElementById('proc-icon-2').classList.add('animate-spin');
+                    lucide.createIcons();
+                }
+                if(pct > 60) {
+                    document.getElementById('proc-icon-2').classList.replace('animate-spin', 'hidden');
+                    document.getElementById('proc-icon-2').outerHTML = `<i data-lucide="check-circle-2" class="w-5 h-5 text-emerald-500"></i>`;
+                    document.getElementById('proc-step-3').classList.remove('opacity-40');
+                    document.getElementById('proc-icon-3').classList.add('animate-spin');
+                    lucide.createIcons();
+                }
+            }, 100);
+
+            try {
+                const refImg = document.getElementById('img-ref-store');
+                const selfImg = document.getElementById('img-selfie-store');
+
+                const opts = new faceapi.TinyFaceDetectorOptions();
+                const refDet = await faceapi.detectSingleFace(refImg, opts).withFaceLandmarks().withFaceDescriptor();
+                const selfDet = await faceapi.detectSingleFace(selfImg, opts).withFaceLandmarks().withFaceDescriptor();
+
+                let matchPercent = 0;
+                let status = "Failed";
+
+                if (refDet && selfDet) {
+                    const dist = faceapi.euclideanDistance(refDet.descriptor, selfDet.descriptor);
+                    // Match Rules:
+                    // Euclidean distance typically ranges 0.3 to 0.6 for same person.
+                    // Let's map distance to a strict percentage.
+                    // < 0.40 -> >98% (Excellent)
+                    // 0.40 - 0.50 -> 90-97% (Good)
+                    // > 0.50 -> <90% (Failed)
+                    
+                    let baseScore = 100 - (dist * 100); 
+                    // adjustment curve to fit requirement:
+                    if(dist <= 0.40) {
+                        matchPercent = 98 + ((0.40 - dist) * 10);
+                    } else if (dist <= 0.50) {
+                        matchPercent = 90 + ((0.50 - dist) * 70);
+                    } else {
+                        matchPercent = Math.max(0, 100 - (dist * 130)); // Drops rapidly below 90
+                    }
+                    
+                    matchPercent = Math.min(100, matchPercent).toFixed(2);
+                    
+                    if(matchPercent >= 90) status = "Verified";
+                }
+
+                clearInterval(uiInterval);
+                pRing.style.strokeDashoffset = 0;
+                pText.innerText = `100%`;
+                
+                setTimeout(() => renderResult(status, matchPercent), 500);
+
+            } catch (err) {
+                console.error("AI Error", err);
+                clearInterval(uiInterval);
+                // Hard fail
+                renderResult("Failed", "0.00");
             }
         }
 
-        // 5. EXACT AGE CALCULATION
-        function calculateExactAge(dobString) {
-            let day = 1, month = 1, year = 2000;
-            if(dobString.includes('-') || dobString.includes('/')) {
-                const parts = dobString.split(/[-/]/);
-                if(parts.length === 3) {
-                    day = parseInt(parts[0]);
-                    month = parseInt(parts[1]);
-                    year = parseInt(parts[2]);
-                }
-            } else if (dobString.length === 4) {
-                year = parseInt(dobString);
+        function calculateAge(dobStr) {
+            let day=1, month=1, year=2000;
+            const parts = dobStr.split(/[-/]/);
+            if(parts.length === 3) {
+                day = parseInt(parts[0]);
+                month = parseInt(parts[1]);
+                year = parseInt(parts[2]);
+                // Handle YYYY-MM-DD edge cases
+                if(year < 100) year += 2000;
+                if(parts[0].length === 4) { year = parseInt(parts[0]); day = parseInt(parts[2]); }
+            } else if (dobStr.length === 4) {
+                year = parseInt(dobStr);
             }
 
             const birthDate = new Date(`${year}-${month}-${day}`);
@@ -826,8 +688,8 @@
 
             if (days < 0) {
                 months--;
-                const previousMonth = new Date(today.getFullYear(), today.getMonth(), 0);
-                days += previousMonth.getDate();
+                const prevMonth = new Date(today.getFullYear(), today.getMonth(), 0);
+                days += prevMonth.getDate();
             }
             if (months < 0) {
                 years--;
@@ -836,159 +698,88 @@
             return { years, months, days };
         }
 
-        // 6. REAL AI PROCESSING ENGINE
-        async function runAIEngine() {
-            showStep('processing');
+        function renderResult(status, score) {
+            const age = calculateAge(state.dob);
 
-            let progress = 0;
-            const progressRing = document.getElementById('progress-ring');
-            const progressText = document.getElementById('progress-text');
-            const circumference = 2 * Math.PI * 45;
+            // Populate text
+            document.getElementById('res-data-name').innerText = state.name;
+            document.getElementById('res-data-dob').innerText = state.dob;
+            document.getElementById('res-data-years').innerText = age.years;
+            document.getElementById('res-data-months').innerText = age.months;
+            document.getElementById('res-data-days').innerText = age.days;
+            document.getElementById('res-data-address').innerText = state.address || "Not Extracted";
+            document.getElementById('res-score').innerText = `${score}%`;
 
-            const uiInterval = setInterval(() => {
-                progress += 5;
-                if(progress > 90) progress = 90;
-                const offset = circumference - (progress / 100) * circumference;
-                progressRing.style.strokeDashoffset = offset;
-                progressText.innerText = progress + '%';
+            // Style based on status
+            const wrapper = document.getElementById('res-icon-wrapper');
+            const icon = document.getElementById('res-icon');
+            const title = document.getElementById('res-title');
+            const scoreTxt = document.getElementById('res-score');
 
-                if(progress === 30) { document.getElementById('chk-1').classList.replace('text-slate-300', 'text-emerald-500'); document.getElementById('txt-1').classList.add('text-slate-800'); }
-                if(progress === 60) { document.getElementById('chk-2').classList.replace('text-slate-300', 'text-emerald-500'); document.getElementById('txt-2').classList.add('text-slate-800'); }
-            }, 200);
-
-            try {
-                if (!aiModelsLoaded) {
-                    throw new Error("AI Models were bypassed.");
-                }
-
-                // FIX: this must point at the captured ID photo, which lives in #front-image-preview
-                // (the previous build referenced a non-existent #ref-image-preview element, which meant
-                // real face matching never actually ran and silently fell through to the simulated result).
-                const refImg = document.getElementById('front-image-preview');
-                const selfieImg = document.getElementById('selfie-image-preview');
-
-                const options = new faceapi.TinyFaceDetectorOptions();
-
-                const refDetection = await faceapi.detectSingleFace(refImg, options).withFaceLandmarks().withFaceDescriptor();
-                const selfieDetection = await faceapi.detectSingleFace(selfieImg, options).withFaceLandmarks().withFaceDescriptor();
-
-                let isMatch = false;
-                let matchScore = 0;
-
-                if (refDetection && selfieDetection) {
-                    const distance = faceapi.euclideanDistance(refDetection.descriptor, selfieDetection.descriptor);
-                    isMatch = distance < FACE_MATCH_THRESHOLD;
-                    matchScore = Math.max(0, 100 - (distance * 100)).toFixed(1);
-                } else {
-                    console.log("Face not detected in one or both images");
-                    matchScore = 0;
-                }
-
-                clearInterval(uiInterval);
-                progressRing.style.strokeDashoffset = 0;
-                progressText.innerText = '100%';
-                document.getElementById('chk-3').classList.replace('text-slate-300', 'text-emerald-500');
-                document.getElementById('txt-3').classList.add('text-slate-800');
-
-                setTimeout(() => showResult(isMatch, matchScore), 800);
-
-            } catch (error) {
-                console.error("AI Processing Error:", error);
-                clearInterval(uiInterval);
-
-                const simulatedMatch = Math.random() > 0.3;
-                const simScore = simulatedMatch ? (85 + Math.random() * 10).toFixed(1) : (20 + Math.random() * 20).toFixed(1);
-
-                progressRing.style.strokeDashoffset = 0;
-                progressText.innerText = '100%';
-
-                setTimeout(() => showResult(simulatedMatch, simScore), 800);
-            }
-        }
-
-        // 7. SHOW RESULTS
-        function showResult(isMatch, matchScore) {
-            const exactAge = calculateExactAge(extractedData.dob);
-
-            const statusIcon = document.getElementById('result-status-icon');
-            const statusTitle = document.getElementById('result-status-title');
-            const statusDesc = document.getElementById('result-status-desc');
-            const matchStatusTxt = document.getElementById('res-match-status');
-
-            if (isMatch) {
-                statusIcon.innerHTML = `<i data-lucide="check-circle-2" class="w-16 h-16 text-emerald-600"></i>`;
-                statusTitle.innerText = "Verification Complete";
-                statusTitle.className = "text-2xl font-black text-emerald-700 mb-1";
-                statusDesc.innerText = "Player identity confirmed securely.";
-                matchStatusTxt.innerText = `${matchScore}% (Verified)`;
-                matchStatusTxt.className = "font-bold text-emerald-600";
+            if(status === "Verified") {
+                wrapper.className = "w-20 h-20 rounded-full flex items-center justify-center mb-3 shadow-lg bg-emerald-500 shadow-emerald-500/40";
+                icon.setAttribute('data-lucide', 'shield-check');
+                title.innerText = "Verified";
+                title.className = "text-3xl font-black tracking-tight mb-1 text-emerald-600";
+                scoreTxt.className = "text-sm font-black text-emerald-600";
             } else {
-                statusIcon.innerHTML = `<i data-lucide="user-x" class="w-16 h-16 text-rose-600"></i>`;
-                statusTitle.innerText = "Photo Not Matching";
-                statusTitle.className = "text-2xl font-black text-rose-700 mb-1";
-                statusDesc.innerText = "Selfie does not match the ID photo provided.";
-                matchStatusTxt.innerText = matchScore > 0 ? `${matchScore}% (Failed)` : `No Face Detected`;
-                matchStatusTxt.className = "font-bold text-rose-600";
+                wrapper.className = "w-20 h-20 rounded-full flex items-center justify-center mb-3 shadow-lg bg-rose-500 shadow-rose-500/40";
+                icon.setAttribute('data-lucide', 'shield-alert');
+                title.innerText = "Verification Failed";
+                title.className = "text-3xl font-black tracking-tight mb-1 text-rose-600";
+                scoreTxt.className = "text-sm font-black text-rose-600";
             }
 
-            document.getElementById('res-name').innerText = extractedData.name;
-            document.getElementById('res-years').innerText = exactAge.years;
-            document.getElementById('res-months').innerText = exactAge.months;
-            document.getElementById('res-days').innerText = exactAge.days;
-            document.getElementById('res-address').innerText = extractedData.address;
-
-            showStep('result');
-            lucide.createIcons();
-
-            // ---- Firebase: log this verification event (non-blocking) ----
-            if (window.firebaseBridge) {
-                window.firebaseBridge.logVerification({
-                    name: extractedData.name,
-                    dob: extractedData.dob,
-                    ageYears: exactAge.years,
-                    ageMonths: exactAge.months,
-                    ageDays: exactAge.days,
-                    address: extractedData.address,
-                    matchResult: isMatch ? 'verified' : 'failed',
-                    matchScore: Number(matchScore) || 0,
-                    aiModelsUsed: aiModelsLoaded,
-                    consentGivenAt: consentGivenAt
-                });
-                window.firebaseBridge.trackEvent('verification_complete', {
-                    match_result: isMatch ? 'verified' : 'failed',
-                    match_score: Number(matchScore) || 0
-                });
-            }
+            showView('view-result');
         }
 
-        function resetApp() {
+        function finishVerification() {
+            // 1. Destroy Image Data
+            document.getElementById('img-ref-store').src = "";
+            document.getElementById('img-selfie-store').src = "";
+            document.getElementById('preview-front').src = "";
+            document.getElementById('preview-back').src = "";
+            
+            // 2. Clear Canvas
+            const cRef = document.getElementById('canvas-ref');
+            cRef.getContext('2d').clearRect(0,0,cRef.width, cRef.height);
+            const cSelfie = document.getElementById('canvas-selfie');
+            cSelfie.getContext('2d').clearRect(0,0,cSelfie.width, cSelfie.height);
+
+            // 3. Clear State Object
+            state = {
+                name: '', dob: '', address: '', frontLoaded: false, backLoaded: false,
+                qrTimer: null, videoStream: null, html5QrCode: null
+            };
+
+            // 4. Reset DOM values
+            document.getElementById('edit-name').value = '';
+            document.getElementById('edit-dob').value = '';
+            document.getElementById('edit-address').value = '';
+            document.getElementById('file-front').value = '';
+            document.getElementById('file-back').value = '';
+            document.getElementById('preview-front').classList.add('hidden');
+            document.getElementById('preview-back').classList.add('hidden');
+            document.getElementById('overlay-front').classList.add('hidden');
+            document.getElementById('overlay-back').classList.add('hidden');
+            document.getElementById('file-back').parentElement.style.display = 'block';
+
+            // 5. Reset Processing UI
             document.getElementById('progress-ring').style.strokeDashoffset = 283;
             document.getElementById('progress-text').innerText = '0%';
+            document.getElementById('proc-step-2').classList.add('opacity-40');
+            document.getElementById('proc-step-3').classList.add('opacity-40');
+            document.getElementById('proc-icon-1').outerHTML = `<i id="proc-icon-1" data-lucide="loader-2" class="w-5 h-5 text-blue-500 animate-spin"></i>`;
+            document.getElementById('proc-icon-2').outerHTML = `<i id="proc-icon-2" data-lucide="loader-2" class="w-5 h-5 text-blue-500"></i>`;
+            document.getElementById('proc-icon-3').outerHTML = `<i id="proc-icon-3" data-lucide="loader-2" class="w-5 h-5 text-blue-500"></i>`;
 
-            [1, 2, 3].forEach(i => {
-                document.getElementById('chk-'+i).classList.replace('text-emerald-500', 'text-slate-300');
-                document.getElementById('txt-'+i).classList.remove('text-slate-800');
-            });
+            // 6. Stop all streams
+            if(state.html5QrCode) {
+                try { state.html5QrCode.stop(); } catch(e){}
+            }
 
-            document.getElementById('front-image-preview').classList.add('hidden');
-            document.getElementById('back-image-preview').classList.add('hidden');
-            document.getElementById('id-webcam').classList.remove('hidden');
-
-            document.getElementById('selfie-image-preview').classList.add('hidden');
-            document.getElementById('webcam').classList.remove('hidden');
-
-            document.getElementById('confirm-name').value = '';
-            document.getElementById('confirm-dob').value = '';
-            document.getElementById('confirm-address').value = '';
-            updateOcrStatus('Starting OCR...', 0);
-
-            extractedData = { name: "Unknown", dob: "01-01-2000", address: "Not found" };
-            qrDataExtracted = false;
-            consentGivenAt = null;
-            document.getElementById('consent-checkbox').checked = false;
-            toggleConsentButton();
-
-            showStep('consent');
+            // Return to start
+            showView('view-splash');
         }
     </script>
 </body>
