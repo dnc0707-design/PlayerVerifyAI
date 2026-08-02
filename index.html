@@ -38,26 +38,40 @@
     </style>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-        import { getAnalytics, logEvent } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics.js";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        const firebaseConfig = {
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'playerverify-default';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
             apiKey: "AIzaSyArEqVujLxbvRBDJ9WlRKI78Myz_U0udJU",
             authDomain: "playerverifyai.firebaseapp.com",
             projectId: "playerverifyai",
             storageBucket: "playerverifyai.firebasestorage.app",
             messagingSenderId: "419404743972",
-            appId: "1:419404743972:web:b8f96252fb3b5dc823dfb1",
-            measurementId: "G-Z2L2CH4HDY"
+            appId: "1:419404743972:web:b8f96252fb3b5dc823dfb1"
         };
 
-        try {
-            const app = initializeApp(firebaseConfig);
-            window.firebaseAnalytics = getAnalytics(app);
-            logEvent(window.firebaseAnalytics, 'app_open');
-        } catch(e) {
-            console.warn("Firebase Analytics failed to initialize. Proceeding offline.");
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // Make firebase resources globally available for our app logic
+        window.firebaseEnv = { auth, db, appId, collection, addDoc, serverTimestamp };
+
+        async function initAuth() {
+            try {
+                if (typeof __initial_auth_token !== 'undefined') {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+                console.log("Firebase Auth Ready");
+            } catch (err) {
+                console.error("Firebase Auth Error:", err);
+            }
         }
+        initAuth();
     </script>
 
     <script>
@@ -304,6 +318,10 @@
                     </div>
                 </div>
 
+                <div id="db-save-status" class="w-full bg-blue-50 border border-blue-100 rounded-xl p-3 mb-6 flex items-center justify-center gap-2 text-sm font-bold text-blue-700 shadow-sm hidden">
+                    <i data-lucide="cloud-upload" class="w-5 h-5 animate-pulse"></i> Saving securely to Cloud...
+                </div>
+
                 <button onclick="finishVerification()" class="w-full mt-auto bg-slate-900 hover:bg-black text-white font-bold py-4 rounded-2xl transition-all shadow-xl active:scale-[0.98]">
                     Home / Verify Next Player
                 </button>
@@ -458,9 +476,9 @@
         function getBase64FromImage(imgElement) {
             // Compress and convert to base64 for Gemini
             const canvas = document.createElement('canvas');
-            const MAX_WIDTH = 1200; 
-            let width = imgElement.naturalWidth || imgElement.width || 1200;
-            let height = imgElement.naturalHeight || imgElement.height || 1200;
+            const MAX_WIDTH = 800; // Reduced to guarantee saving fits within Firestore 1MB doc limits
+            let width = imgElement.naturalWidth || imgElement.width || 800;
+            let height = imgElement.naturalHeight || imgElement.height || 800;
 
             if (width > MAX_WIDTH) {
                 height = Math.floor(height * (MAX_WIDTH / width));
@@ -474,7 +492,8 @@
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(imgElement, 0, 0, width, height);
             
-            const dataURL = canvas.toDataURL('image/jpeg', 0.8);
+            // Highly compressed jpeg for safe Firestore storage
+            const dataURL = canvas.toDataURL('image/jpeg', 0.5);
             // Return only the base64 string without the data URI prefix
             return dataURL.split(',')[1]; 
         }
@@ -498,7 +517,7 @@
 
             try {
                 const promptText = `
-                You are an AI assistant specialized in extracting data from Indian Aadhaar cards.
+                You are an authorized OCR AI assistant specialized in extracting data from Indian Aadhaar cards.
                 Analyze the provided ID card image(s).
                 Extract the following details:
                 1. Full Name
@@ -529,20 +548,36 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        contents: [{ parts: parts }]
+                        contents: [{ parts: parts }],
+                        // FIX 1: Force Gemini to output pure JSON
+                        generationConfig: {
+                            response_mime_type: "application/json"
+                        },
+                        // FIX 2: Disable safety filters that accidentally block ID cards
+                        safetySettings: [
+                            { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+                            { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+                            { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+                            { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+                        ]
                     })
                 });
 
                 if (!response.ok) {
-                    throw new Error(`Gemini API returned status: ${response.status}`);
+                    const errorText = await response.text();
+                    throw new Error(`API Error ${response.status}: ${errorText}`);
                 }
 
                 const data = await response.json();
+                
+                // Check if Gemini completely blocked it despite settings
+                if (data.promptFeedback && data.promptFeedback.blockReason) {
+                     throw new Error("Gemini blocked the image for safety reasons.");
+                }
+
                 const responseText = data.candidates[0].content.parts[0].text;
                 
-                // Clean up possible markdown backticks if Gemini stubbornly includes them
                 let cleanJsonString = responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
-                
                 const extracted = JSON.parse(cleanJsonString);
 
                 state.name = extracted.name || state.name;
@@ -550,8 +585,17 @@
                 state.address = extracted.address || state.address;
 
             } catch (err) {
-                console.error("Gemini Extraction Failed", err);
-                alert("Gemini AI extraction failed. You can enter details manually on the next screen.");
+                console.error("Gemini Extraction Failed:", err.message);
+                
+                // Better error message for the user based on exactly what failed
+                if (err.message.includes("403")) {
+                    alert("Extraction Failed: API Key blocked (403). Check your Google Cloud Domain Restrictions. Did you restrict it and try to run on localhost?");
+                } else if (err.message.includes("JSON") || err.name === "SyntaxError") {
+                    alert("Extraction Failed: Gemini did not return valid text. Please enter details manually.");
+                } else {
+                    alert("Gemini AI extraction failed. You can enter details manually on the next screen. Error: " + err.message.substring(0, 50));
+                }
+                
             } finally {
                 btn.innerHTML = `<i data-lucide="sparkles" class="w-5 h-5 text-amber-300"></i> Extract with Gemini`;
                 btn.disabled = false;
@@ -611,12 +655,19 @@
             canvas.width = video.videoWidth || 400; 
             canvas.height = video.videoHeight || 400;
             
+            // Ensure size isn't massive for Database
+            if (canvas.width > 600) {
+                canvas.height = Math.floor(canvas.height * (600 / canvas.width));
+                canvas.width = 600;
+            }
+            
             const ctx = canvas.getContext('2d');
             ctx.translate(canvas.width, 0);
             ctx.scale(-1, 1);
-            ctx.drawImage(video, 0, 0);
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-            document.getElementById('img-selfie-store').src = canvas.toDataURL('image/jpeg', 0.8);
+            // Compress to 0.6 quality for storage
+            document.getElementById('img-selfie-store').src = canvas.toDataURL('image/jpeg', 0.6);
             
             if (state.videoStream) {
                 state.videoStream.getTracks().forEach(track => track.stop());
@@ -786,6 +837,72 @@
             }
 
             showView('view-result');
+            
+            // Trigger Firestore Save
+            saveToDatabase(status, score, age);
+        }
+
+        async function saveToDatabase(status, score, age) {
+            const statusUi = document.getElementById('db-save-status');
+            statusUi.classList.remove('hidden');
+            statusUi.className = "w-full bg-blue-50 border border-blue-100 rounded-xl p-3 mb-6 flex items-center justify-center gap-2 text-sm font-bold text-blue-700 shadow-sm";
+            statusUi.innerHTML = `<i data-lucide="cloud-upload" class="w-5 h-5 animate-pulse"></i> Saving securely to Cloud...`;
+            lucide.createIcons();
+
+            if (!window.firebaseEnv || !window.firebaseEnv.auth.currentUser) {
+                statusUi.className = "w-full bg-rose-50 border border-rose-100 rounded-xl p-3 mb-6 flex items-center justify-center gap-2 text-sm font-bold text-rose-700 shadow-sm";
+                statusUi.innerHTML = `<i data-lucide="cloud-off" class="w-5 h-5"></i> Database Error: Not Authenticated`;
+                lucide.createIcons();
+                return;
+            }
+
+            try {
+                const user = window.firebaseEnv.auth.currentUser;
+                const db = window.firebaseEnv.db;
+                const appId = window.firebaseEnv.appId;
+                
+                // Retrieve the compressed image strings
+                // Make sure we include 'data:image/jpeg;base64,' prefix which is on the src
+                const frontImg = document.getElementById('img-ref-store').src || "";
+                const backImg = document.getElementById('preview-back').src || "";
+                const selfieImg = document.getElementById('img-selfie-store').src || "";
+
+                // MANDATORY STRICT PATHS -> /artifacts/{appId}/users/{userId}/{collectionName}
+                const verificationsRef = window.firebaseEnv.collection(db, 'artifacts', appId, 'users', user.uid, 'verifications');
+                
+                const record = {
+                    playerData: {
+                        name: state.name,
+                        dob: state.dob,
+                        address: state.address,
+                        ageYears: age.years,
+                        ageMonths: age.months,
+                        ageDays: age.days
+                    },
+                    verification: {
+                        status: status,
+                        matchScore: parseFloat(score),
+                        timestamp: window.firebaseEnv.serverTimestamp()
+                    },
+                    images: {
+                        frontId: frontImg,
+                        backId: backImg,
+                        selfie: selfieImg
+                    }
+                };
+
+                await window.firebaseEnv.addDoc(verificationsRef, record);
+                
+                statusUi.className = "w-full bg-emerald-50 border border-emerald-100 rounded-xl p-3 mb-6 flex items-center justify-center gap-2 text-sm font-bold text-emerald-700 shadow-sm";
+                statusUi.innerHTML = `<i data-lucide="cloud-check" class="w-5 h-5"></i> Saved to Cloud Successfully`;
+                lucide.createIcons();
+
+            } catch (err) {
+                console.error("Firestore Save Error:", err);
+                statusUi.className = "w-full bg-rose-50 border border-rose-100 rounded-xl p-3 mb-6 flex items-center justify-center gap-2 text-sm font-bold text-rose-700 shadow-sm";
+                statusUi.innerHTML = `<i data-lucide="alert-circle" class="w-5 h-5"></i> Failed to save to Cloud`;
+                lucide.createIcons();
+            }
         }
 
         function finishVerification() {
@@ -828,6 +945,8 @@
             document.getElementById('proc-icon-1').outerHTML = `<i id="proc-icon-1" data-lucide="loader-2" class="w-5 h-5 text-blue-500 animate-spin shrink-0"></i>`;
             document.getElementById('proc-icon-2').outerHTML = `<i id="proc-icon-2" data-lucide="loader-2" class="w-5 h-5 text-blue-500 shrink-0"></i>`;
             document.getElementById('proc-icon-3').outerHTML = `<i id="proc-icon-3" data-lucide="loader-2" class="w-5 h-5 text-blue-500 shrink-0"></i>`;
+            
+            document.getElementById('db-save-status').classList.add('hidden');
 
             const btnOcr = document.getElementById('btn-extract-ocr');
             btnOcr.innerHTML = `<i data-lucide="sparkles" class="w-5 h-5 text-amber-300"></i> Extract with Gemini`;
