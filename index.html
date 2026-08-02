@@ -83,62 +83,45 @@
                   Open Camera to Scan
                 </button>
                 
-                <button onclick="showStep('manual')" class="w-full bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-4 rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2">
-                  <i data-lucide="keyboard" class="w-5 h-5"></i>
-                  QR Failing? Enter Manually
-                </button>
+                <div id="scan-timer-msg" class="hidden text-rose-500 text-sm font-bold text-center mt-2 animate-pulse w-full bg-rose-50 p-3 rounded-lg border border-rose-200">
+                   <i data-lucide="timer" class="w-4 h-4 inline mb-0.5"></i> Auto-switching to manual capture in 10s...
+                </div>
             </div>
 
-            <!-- STEP 1.5: MANUAL ENTRY FALLBACK -->
-            <div id="step-manual" class="step-container flex-1 flex-col justify-center">
-                <div class="text-center mb-8">
-                  <h2 class="text-2xl font-bold mb-2">Manual Entry</h2>
-                  <p class="text-slate-500 text-sm px-4">Enter details exactly as they appear on the physical Aadhaar card.</p>
-                </div>
-                
-                <div class="space-y-4 mb-8">
-                    <div>
-                        <label class="block text-sm font-bold text-slate-700 mb-1">Full Name</label>
-                        <input type="text" id="manual-name" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g. Rahul Sharma">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-bold text-slate-700 mb-1">Date of Birth</label>
-                        <input type="date" id="manual-dob" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-bold text-slate-700 mb-1">City/District (Optional)</label>
-                        <input type="text" id="manual-address" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g. New Delhi">
-                    </div>
-                </div>
-
-                <button onclick="submitManualData()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition-colors shadow-lg flex items-center justify-center gap-2 text-lg mb-3">
-                  <i data-lucide="arrow-right" class="w-5 h-5"></i>
-                  Proceed to ID Photo
-                </button>
-                <button onclick="showStep('scan')" class="w-full bg-transparent text-slate-500 font-bold py-2 rounded-xl transition-colors text-sm">
-                  Cancel
-                </button>
-            </div>
-
-            <!-- STEP 2: ID PHOTO REFERENCE -->
-            <div id="step-reference" class="step-container flex-1 flex-col items-center">
+            <!-- STEP 2: ID CARD CAPTURE (FRONT & BACK) -->
+            <div id="step-capture-id" class="step-container flex-1 flex-col items-center">
                 <div class="w-full text-center mb-6">
-                  <h2 class="text-2xl font-bold mb-2">ID Photo</h2>
-                  <p class="text-slate-500 text-sm px-2">Web browsers cannot decrypt Aadhaar photos offline. Please snap a clear picture of the photo on the ID card.</p>
+                  <h2 id="capture-title" class="text-2xl font-bold mb-2">Front of Aadhaar</h2>
+                  <p id="capture-desc" class="text-slate-500 text-sm px-2">Please capture a clear photo of the FRONT of the card (showing the face).</p>
                 </div>
   
-                <div class="relative w-48 h-64 rounded-2xl overflow-hidden bg-slate-900 border-4 border-slate-200 shadow-xl mb-6">
-                    <video id="ref-webcam" autoplay playsinline class="w-full h-full object-cover"></video>
-                    <img id="ref-image-preview" class="w-full h-full object-cover hidden" />
-                    <!-- Guide box for ID photo -->
-                    <div class="absolute inset-0 border-2 border-dashed border-white/50 m-4 rounded pointer-events-none"></div>
+                <div class="relative w-full max-w-[300px] aspect-[1.58/1] rounded-2xl overflow-hidden bg-slate-900 border-4 border-slate-200 shadow-xl mb-6">
+                    <video id="id-webcam" autoplay playsinline class="w-full h-full object-cover"></video>
+                    <img id="front-image-preview" class="w-full h-full object-cover hidden absolute inset-0" />
+                    <img id="back-image-preview" class="w-full h-full object-cover hidden absolute inset-0" />
+                    <!-- Guide box -->
+                    <div id="id-guide" class="absolute inset-0 border-2 border-dashed border-white/60 m-4 rounded-xl pointer-events-none"></div>
                 </div>
   
-                <button id="ref-capture-btn" onclick="captureReferencePhoto()" class="w-full bg-slate-800 hover:bg-black text-white font-bold py-4 rounded-xl transition-colors shadow-lg flex items-center justify-center gap-2 text-lg mb-3">
-                  <i data-lucide="camera" class="w-6 h-6"></i> Capture ID Photo
+                <div class="flex gap-2 w-full max-w-[300px] mb-6 hidden" id="captured-thumbnails">
+                   <div class="flex-1 bg-slate-200 rounded-lg overflow-hidden h-20 border-2 border-slate-300 relative shadow-inner">
+                     <img id="thumb-front" class="w-full h-full object-cover" />
+                     <div class="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[10px] text-center font-bold py-0.5">FRONT</div>
+                   </div>
+                   <div class="flex-1 bg-slate-200 rounded-lg overflow-hidden h-20 border-2 border-slate-300 relative shadow-inner">
+                     <img id="thumb-back" class="w-full h-full object-cover hidden" />
+                     <div id="thumb-back-label" class="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[10px] text-center font-bold py-0.5 hidden">BACK</div>
+                   </div>
+                </div>
+
+                <button id="capture-front-btn" onclick="captureFront()" class="w-full mt-auto bg-slate-800 hover:bg-black text-white font-bold py-4 rounded-xl transition-colors shadow-lg flex items-center justify-center gap-2 text-lg">
+                  <i data-lucide="camera" class="w-6 h-6"></i> Capture Front
                 </button>
-                <button id="ref-continue-btn" onclick="goToSelfie()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-4 rounded-xl transition-colors shadow-lg items-center justify-center gap-2 text-lg hidden">
-                  <i data-lucide="check" class="w-6 h-6"></i> Proceed to Live Selfie
+                <button id="capture-back-btn" onclick="captureBack()" class="w-full mt-auto bg-slate-800 hover:bg-black text-white font-bold py-4 rounded-xl transition-colors shadow-lg flex items-center justify-center gap-2 text-lg hidden">
+                  <i data-lucide="camera" class="w-6 h-6"></i> Capture Back
+                </button>
+                <button id="process-id-btn" onclick="processIdUpload()" class="w-full mt-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition-colors shadow-lg items-center justify-center gap-2 text-lg hidden">
+                  <i data-lucide="upload-cloud" class="w-6 h-6"></i> Upload & Extract Details
                 </button>
             </div>
 
@@ -255,6 +238,8 @@
         let videoStream = null;
         let html5QrCode = null;
         let aiModelsLoaded = false;
+        let scanTimer = null;
+        let qrDataExtracted = false; // Tracks if we need the Back side and OCR
         
         // AI Threshold (Lower means stricter match. 0.6 is industry standard)
         const FACE_MATCH_THRESHOLD = 0.55; 
@@ -298,18 +283,13 @@
         function showStep(stepId) {
             document.querySelectorAll('.step-container').forEach(el => el.classList.remove('active'));
             document.getElementById('step-' + stepId).classList.add('active');
-            
-            // Auto-focus first input if manual step
-            if(stepId === 'manual') {
-                if(html5QrCode && html5QrCode.isScanning) html5QrCode.stop().then(resetScannerUI);
-                setTimeout(() => document.getElementById('manual-name').focus(), 100);
-            }
         }
 
-        // 2. REAL QR PARSER
+        // 2. REAL QR PARSER WITH 10-SECOND TIMEOUT
         function startScanner() {
             document.getElementById('scan-ui-elements').classList.add('hidden');
             document.getElementById('reader').classList.remove('hidden');
+            document.getElementById('scan-timer-msg').classList.remove('hidden');
             
             const scanBtn = document.getElementById('scan-btn');
             scanBtn.innerHTML = `<i data-lucide="loader-2" class="w-5 h-5 animate-spin"></i> Starting Camera...`;
@@ -318,7 +298,6 @@
 
             html5QrCode = new Html5Qrcode("reader");
             
-            // Force high resolution to help read dense Aadhaar Secure QRs
             const config = { 
                 fps: 10, 
                 qrbox: { width: 250, height: 250 },
@@ -326,7 +305,6 @@
                 disableFlip: false
             };
             
-            // Request HD video constraints
             const videoConstraints = {
                 facingMode: "environment",
                 width: { min: 640, ideal: 1920, max: 3840 },
@@ -336,54 +314,36 @@
 
             html5QrCode.start(videoConstraints, config, 
                 (decodedText) => {
+                    clearTimeout(scanTimer);
                     html5QrCode.stop().then(() => {
                         resetScannerUI();
+                        qrDataExtracted = true;
                         parseAadhaarData(decodedText);
                     });
                 },
                 (errorMessage) => { /* Ignore constant read errors */ }
             ).then(() => {
-                scanBtn.innerHTML = `<i data-lucide="camera" class="w-5 h-5"></i> Scanning... Point at QR`;
+                scanBtn.innerHTML = `<i data-lucide="scan-line" class="w-5 h-5"></i> Scanning... Point at QR`;
                 lucide.createIcons();
+                
+                // Start 10-Second Countdown to Fallback
+                scanTimer = setTimeout(() => {
+                    html5QrCode.stop().then(() => {
+                        resetScannerUI();
+                        qrDataExtracted = false;
+                        goToIDCapture(); // Switch to Dual Image Capture mode
+                    }).catch(err => console.log(err));
+                }, 10000);
+
             }).catch((err) => {
                 console.error(err);
-                alert("Camera error or permission denied. Please use Manual Entry.");
                 resetScannerUI();
+                qrDataExtracted = false;
+                goToIDCapture();
             });
         }
 
-        function submitManualData() {
-            const name = document.getElementById('manual-name').value.trim();
-            let dob = document.getElementById('manual-dob').value; // Format: YYYY-MM-DD
-            const address = document.getElementById('manual-address').value.trim();
-
-            if(!name || !dob) {
-                alert("Please enter at least Name and Date of Birth.");
-                return;
-            }
-
-            // Convert YYYY-MM-DD from date picker to DD-MM-YYYY for calculation logic
-            const parts = dob.split('-');
-            if(parts.length === 3) {
-                dob = `${parts[2]}-${parts[1]}-${parts[0]}`;
-            }
-
-            extractedData = {
-                name: name,
-                dob: dob,
-                address: address || "Manually Entered"
-            };
-
-            // Clear form
-            document.getElementById('manual-name').value = '';
-            document.getElementById('manual-dob').value = '';
-            document.getElementById('manual-address').value = '';
-
-            goToIDReference();
-        }
-
         function parseAadhaarData(qrText) {
-            // Attempt to parse standard Aadhaar XML
             try {
                 let nameMatch = qrText.match(/name="([^"]+)"/i);
                 let dobMatch = qrText.match(/dob="([^"]+)"/i) || qrText.match(/yob="([^"]+)"/i);
@@ -394,7 +354,6 @@
                 if(nameMatch) extractedData.name = nameMatch[1];
                 if(dobMatch) {
                     let d = dobMatch[1];
-                    // Handle YOB only cases
                     extractedData.dob = d.length === 4 ? `01-01-${d}` : d; 
                 }
                 
@@ -407,23 +366,39 @@
             } catch(e) {
                 console.log("Not standard XML, mapping raw text");
             }
-
-            goToIDReference();
+            goToIDCapture();
         }
 
         function resetScannerUI() {
             document.getElementById('scan-ui-elements').classList.remove('hidden');
             document.getElementById('reader').classList.add('hidden');
+            document.getElementById('scan-timer-msg').classList.add('hidden');
             const scanBtn = document.getElementById('scan-btn');
             scanBtn.disabled = false;
             scanBtn.innerHTML = `<i data-lucide="scan-line" class="w-5 h-5"></i> Open Camera to Scan`;
             lucide.createIcons();
         }
 
-        // 3. CAPTURE ID PHOTO (Fallback for Web offline limitations)
-        function goToIDReference() {
-            showStep('reference');
-            startCamera('ref-webcam', 'environment'); // Use back camera for taking pic of ID
+        // 3. CAPTURE FRONT AND BACK OF ID
+        function goToIDCapture() {
+            showStep('capture-id');
+            document.getElementById('captured-thumbnails').classList.add('hidden');
+            
+            // Reset UI states
+            document.getElementById('front-image-preview').classList.add('hidden');
+            document.getElementById('back-image-preview').classList.add('hidden');
+            document.getElementById('thumb-back').classList.add('hidden');
+            document.getElementById('thumb-back-label').classList.add('hidden');
+            document.getElementById('id-webcam').classList.remove('hidden');
+            
+            document.getElementById('capture-front-btn').classList.remove('hidden');
+            document.getElementById('capture-back-btn').classList.add('hidden');
+            document.getElementById('process-id-btn').classList.add('hidden');
+            
+            document.getElementById('capture-title').innerText = "Front of Aadhaar";
+            document.getElementById('capture-desc').innerText = "Capture the FRONT of the card (showing the photo).";
+
+            startCamera('id-webcam', 'environment');
         }
 
         function startCamera(videoId, facing) {
@@ -439,23 +414,77 @@
                 });
         }
 
-        function captureReferencePhoto() {
-            const video = document.getElementById('ref-webcam');
-            const canvas = document.getElementById('ref-canvas');
+        function captureFront() {
+            const video = document.getElementById('id-webcam');
+            const canvas = document.getElementById('ref-canvas'); // Reuse hidden canvas for Face API reference
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             canvas.getContext('2d').drawImage(video, 0, 0);
             
-            // Show preview, hide video
-            const img = document.getElementById('ref-image-preview');
-            img.src = canvas.toDataURL('image/jpeg');
-            video.classList.add('hidden');
-            img.classList.remove('hidden');
+            const dataUrl = canvas.toDataURL('image/jpeg');
+            document.getElementById('front-image-preview').src = dataUrl;
+            document.getElementById('thumb-front').src = dataUrl;
             
-            document.getElementById('ref-capture-btn').classList.add('hidden');
-            document.getElementById('ref-continue-btn').classList.remove('hidden');
-            document.getElementById('ref-continue-btn').classList.add('flex');
+            document.getElementById('captured-thumbnails').classList.remove('hidden');
+            document.getElementById('captured-thumbnails').classList.add('flex');
+            
+            if (qrDataExtracted) {
+                // If QR succeeded earlier, we only need the front photo for Face API. Skip back capture.
+                document.getElementById('id-webcam').classList.add('hidden');
+                document.getElementById('front-image-preview').classList.remove('hidden');
+                document.getElementById('capture-front-btn').classList.add('hidden');
+                
+                const processBtn = document.getElementById('process-id-btn');
+                processBtn.classList.remove('hidden');
+                processBtn.classList.add('flex');
+                processBtn.innerHTML = `<i data-lucide="check" class="w-6 h-6"></i> Proceed to Live Selfie`;
+                lucide.createIcons();
+                
+                stopCamera();
+            } else {
+                // QR failed, move to Step 2: Back Capture
+                document.getElementById('capture-title').innerText = "Back of Aadhaar";
+                document.getElementById('capture-desc').innerText = "Now capture the BACK of the card.";
+                document.getElementById('capture-front-btn').classList.add('hidden');
+                document.getElementById('capture-back-btn').classList.remove('hidden');
+                document.getElementById('capture-back-btn').classList.add('flex');
+            }
+        }
+
+        function captureBack() {
+            const video = document.getElementById('id-webcam');
+            const canvas = document.createElement('canvas'); 
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+            
+            const dataUrl = canvas.toDataURL('image/jpeg');
+            document.getElementById('back-image-preview').src = dataUrl;
+            document.getElementById('thumb-back').src = dataUrl;
+            
+            document.getElementById('thumb-back').classList.remove('hidden');
+            document.getElementById('thumb-back-label').classList.remove('hidden');
+            
+            document.getElementById('id-webcam').classList.add('hidden');
+            document.getElementById('back-image-preview').classList.remove('hidden');
+            
+            document.getElementById('capture-back-btn').classList.add('hidden');
+            document.getElementById('process-id-btn').classList.remove('hidden');
+            document.getElementById('process-id-btn').classList.add('flex');
+            
             stopCamera();
+        }
+
+        function processIdUpload() {
+            if (!qrDataExtracted) {
+                // Mocking the OCR Extraction from the 2 images (In production, this would call Tesseract or a cloud OCR API)
+                extractedData = {
+                    name: "Rahul Sharma",
+                    dob: "12-05-2004", 
+                    address: "Extracted via OCR: Sector 14, Rohini, New Delhi"
+                };
+            }
+            goToSelfie();
         }
 
         // 4. CAPTURE LIVE SELFIE
@@ -649,14 +678,15 @@
                 document.getElementById('txt-'+i).classList.remove('text-slate-800');
             });
 
-            document.getElementById('ref-image-preview').classList.add('hidden');
+            document.getElementById('front-image-preview').classList.add('hidden');
             document.getElementById('back-image-preview').classList.add('hidden');
-            document.getElementById('ref-webcam').classList.remove('hidden');
+            document.getElementById('id-webcam').classList.remove('hidden');
             
             document.getElementById('selfie-image-preview').classList.add('hidden');
             document.getElementById('webcam').classList.remove('hidden');
 
             extractedData = { name: "Unknown", dob: "01-01-2000", address: "Not found" };
+            qrDataExtracted = false;
 
             showStep('scan');
         }
