@@ -8,19 +8,18 @@
     <meta name="description" content="Tournament Identity Verification">
     <meta name="theme-color" content="#0f172a">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="manifest" href="manifest.json">
-    <link rel="apple-touch-icon" href="https://placehold.co/192x192/0f172a/ffffff?text=PV">
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    
     <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <!-- Note: Tesseract.js has been removed. We now use Gemini API for extraction. -->
 
     <style>
         body { -webkit-tap-highlight-color: transparent; }
-        .glass-card { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
         .view-section { display: none; animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         .view-section.active { display: flex; }
         
@@ -35,24 +34,13 @@
             100% { top: 100%; opacity: 0; }
         }
         .animate-scan-line { animation: scanLine 2s linear infinite; }
-        
-        /* Hide scrollbar for clean UI */
         ::-webkit-scrollbar { display: none; }
     </style>
-
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('sw.js').catch(err => console.log('SW Registration failed'));
-            });
-        }
-    </script>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
         import { getAnalytics, logEvent } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics.js";
 
-        // STRICT PRIVACY: Only Analytics is initialized. No Auth, No Firestore, No Storage.
         const firebaseConfig = {
             apiKey: "AIzaSyArEqVujLxbvRBDJ9WlRKI78Myz_U0udJU",
             authDomain: "playerverifyai.firebaseapp.com",
@@ -71,13 +59,19 @@
             console.warn("Firebase Analytics failed to initialize. Proceeding offline.");
         }
     </script>
+
+    <script>
+        // =========================================================================
+        // GEMINI API CONFIGURATION
+        // =========================================================================
+        const GEMINI_API_KEY = "AQ.Ab8RN6KkeFGL0UoLBJq0YPcioLMGNtEJukTxmg3uuXMb06lDlA"; 
+    </script>
 </head>
 
 <body class="bg-slate-900 min-h-screen flex items-center justify-center p-0 sm:p-4 font-sans text-slate-800 selection:bg-blue-200">
 
     <div class="w-full h-[100dvh] sm:h-auto sm:max-w-md sm:min-h-[800px] bg-slate-50 sm:rounded-[2.5rem] shadow-2xl overflow-hidden relative flex flex-col">
         
-        <!-- App Header -->
         <div class="bg-gradient-to-r from-slate-900 to-slate-800 text-white p-6 sm:rounded-t-[2.5rem] shadow-lg z-20 flex-shrink-0">
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-full bg-emerald-400/20 flex items-center justify-center">
@@ -85,26 +79,25 @@
                 </div>
                 <div>
                     <h1 class="text-xl font-black tracking-tight">PlayerVerify <span class="text-emerald-400 text-sm align-top">AI</span></h1>
-                    <p class="text-xs text-slate-400 font-medium tracking-wide uppercase mt-0.5">Identity Verification</p>
+                    <p class="text-xs text-slate-400 font-medium tracking-wide uppercase mt-0.5">Gemini Powered Verification</p>
                 </div>
             </div>
         </div>
 
-        <!-- Scrollable Content Area -->
-        <div class="flex-1 flex flex-col relative overflow-y-auto">
+        <div class="flex-1 flex flex-col relative overflow-y-auto pb-6">
             
             <div id="view-splash" class="view-section active flex-1 flex-col justify-center items-center p-6 text-center">
                 <div class="w-32 h-32 bg-white rounded-3xl shadow-xl flex items-center justify-center mb-8 rotate-3 transition-transform">
-                    <i data-lucide="fingerprint" class="w-16 h-16 text-blue-600"></i>
+                    <i data-lucide="sparkles" class="w-16 h-16 text-blue-600"></i>
                 </div>
-                <h2 class="text-3xl font-black text-slate-800 mb-3">Secure Verification</h2>
+                <h2 class="text-3xl font-black text-slate-800 mb-3">Gemini Verification</h2>
                 <p class="text-slate-500 text-sm mb-10 px-4 leading-relaxed">
-                    100% Local Processing. Your data never leaves this device and is permanently deleted after verification.
+                    Powered by Google Gemini 1.5 Flash for instant data extraction and local AI for biometric matching.
                 </p>
                 
                 <div id="model-loader" class="w-full flex flex-col items-center">
                     <div class="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-3"></div>
-                    <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Loading AI Engine...</span>
+                    <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Loading Local Face AI...</span>
                 </div>
 
                 <button id="btn-start" onclick="startWorkflow()" class="hidden w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-4 rounded-2xl transition-all shadow-[0_8px_30px_rgb(37,99,235,0.3)] flex items-center justify-center gap-2 text-lg active:scale-[0.98]">
@@ -128,100 +121,110 @@
                     <i data-lucide="timer" class="w-4 h-4"></i> Auto-fallback in <span id="timer-count">10</span>s
                 </div>
 
-                <button onclick="fallbackToManual()" class="w-full bg-slate-100 text-slate-700 font-bold py-4 rounded-2xl hover:bg-slate-200 transition-colors flex items-center justify-center gap-2 border border-slate-200">
-                    Skip & Upload Manually
+                <button onclick="fallbackToManual()" class="w-full bg-slate-100 text-slate-700 font-bold py-4 rounded-2xl hover:bg-slate-200 transition-colors flex items-center justify-center gap-2 border border-slate-200 shadow-sm">
+                    <i data-lucide="image-plus" class="w-5 h-5"></i> Upload ID Image / PDF Manually
                 </button>
             </div>
 
             <div id="view-manual" class="view-section flex-1 flex-col p-6">
                 <div class="text-center mb-6 mt-4">
                     <div class="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                        <i data-lucide="camera" class="text-amber-600 w-6 h-6"></i>
+                        <i data-lucide="file-scan" class="text-amber-600 w-6 h-6"></i>
                     </div>
                     <h2 class="text-2xl font-black mb-1">Upload Aadhaar</h2>
-                    <p class="text-slate-500 text-sm">Please upload clear photos of the card.</p>
+                    <p class="text-slate-500 text-sm">Gemini AI will intelligently extract your details.</p>
                 </div>
 
                 <div class="space-y-4 flex-1">
-                    <!-- Front Upload -->
                     <label class="block w-full relative cursor-pointer group">
-                        <input type="file" accept="image/*" capture="environment" id="file-front" class="hidden" onchange="handleFileUpload(event, 'front')">
-                        <div class="w-full h-32 border-2 border-dashed border-slate-300 rounded-2xl bg-slate-50 hover:bg-blue-50 hover:border-blue-300 transition-colors flex flex-col items-center justify-center overflow-hidden relative">
+                        <input type="file" accept="image/*,application/pdf" capture="environment" id="file-front" class="hidden" onchange="handleFileUpload(event, 'front')">
+                        <div class="w-full h-32 border-2 border-dashed border-slate-300 rounded-2xl bg-slate-50 hover:bg-blue-50 hover:border-blue-300 transition-colors flex flex-col items-center justify-center overflow-hidden relative shadow-sm">
                             <img id="preview-front" class="absolute inset-0 w-full h-full object-cover hidden z-10" />
                             <div class="absolute inset-0 bg-black/40 z-20 hidden flex items-center justify-center" id="overlay-front">
                                 <i data-lucide="check-circle-2" class="text-white w-8 h-8"></i>
                             </div>
                             <i data-lucide="image-plus" class="text-slate-400 w-8 h-8 mb-2"></i>
-                            <span class="text-sm font-bold text-slate-600">Capture FRONT Side</span>
+                            <span class="text-sm font-bold text-slate-600">Upload FRONT (Photo side)</span>
                         </div>
                     </label>
 
-                    <!-- Back Upload -->
-                    <label class="block w-full relative cursor-pointer group">
-                        <input type="file" accept="image/*" capture="environment" id="file-back" class="hidden" onchange="handleFileUpload(event, 'back')">
-                        <div class="w-full h-32 border-2 border-dashed border-slate-300 rounded-2xl bg-slate-50 hover:bg-blue-50 hover:border-blue-300 transition-colors flex flex-col items-center justify-center overflow-hidden relative">
+                    <label class="block w-full relative cursor-pointer group" id="upload-back-container">
+                        <input type="file" accept="image/*,application/pdf" capture="environment" id="file-back" class="hidden" onchange="handleFileUpload(event, 'back')">
+                        <div class="w-full h-32 border-2 border-dashed border-slate-300 rounded-2xl bg-slate-50 hover:bg-blue-50 hover:border-blue-300 transition-colors flex flex-col items-center justify-center overflow-hidden relative shadow-sm">
                             <img id="preview-back" class="absolute inset-0 w-full h-full object-cover hidden z-10" />
                             <div class="absolute inset-0 bg-black/40 z-20 hidden flex items-center justify-center" id="overlay-back">
                                 <i data-lucide="check-circle-2" class="text-white w-8 h-8"></i>
                             </div>
                             <i data-lucide="image-plus" class="text-slate-400 w-8 h-8 mb-2"></i>
-                            <span class="text-sm font-bold text-slate-600">Capture BACK Side</span>
+                            <span class="text-sm font-bold text-slate-600">Upload BACK (Address side)</span>
                         </div>
                     </label>
                 </div>
 
-                <button id="btn-extract-ocr" onclick="startOCR()" disabled class="w-full bg-slate-800 text-white font-bold py-4 rounded-2xl mt-6 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-                    Extract Details <i data-lucide="chevron-right" class="w-5 h-5"></i>
+                <button id="btn-extract-ocr" onclick="startGeminiExtraction()" disabled class="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-4 rounded-2xl mt-6 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg transition-all active:scale-[0.98]">
+                    <i data-lucide="sparkles" class="w-5 h-5 text-amber-300"></i> Extract with Gemini
                 </button>
             </div>
 
             <div id="view-ocr-edit" class="view-section flex-1 flex-col p-6">
                 <div class="mb-6 mt-2">
                     <h2 class="text-2xl font-black mb-1">Verify Details</h2>
-                    <p class="text-slate-500 text-sm">Review the extracted data and correct if necessary.</p>
+                    <p class="text-slate-500 text-sm">Review the data extracted by Gemini.</p>
                 </div>
 
                 <div class="space-y-4 flex-1">
                     <div>
                         <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Full Name</label>
-                        <input type="text" id="edit-name" class="w-full bg-white border-2 border-slate-200 rounded-xl px-4 py-3 font-semibold text-slate-800 focus:border-blue-500 focus:ring-0 outline-none transition-colors">
+                        <input type="text" id="edit-name" class="w-full bg-white border-2 border-slate-200 rounded-xl px-4 py-3 font-semibold text-slate-800 focus:border-blue-500 focus:ring-0 outline-none transition-colors shadow-sm">
                     </div>
                     <div>
-                        <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Date of Birth (DD/MM/YYYY)</label>
-                        <input type="text" id="edit-dob" placeholder="15/08/2004" class="w-full bg-white border-2 border-slate-200 rounded-xl px-4 py-3 font-semibold text-slate-800 focus:border-blue-500 focus:ring-0 outline-none transition-colors">
+                        <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Date of Birth (DD-MM-YYYY)</label>
+                        <input type="text" id="edit-dob" placeholder="15-08-2004" class="w-full bg-white border-2 border-slate-200 rounded-xl px-4 py-3 font-semibold text-slate-800 focus:border-blue-500 focus:ring-0 outline-none transition-colors shadow-sm">
                     </div>
                     <div>
                         <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Address</label>
-                        <textarea id="edit-address" rows="3" class="w-full bg-white border-2 border-slate-200 rounded-xl px-4 py-3 font-medium text-sm text-slate-700 focus:border-blue-500 focus:ring-0 outline-none transition-colors"></textarea>
+                        <textarea id="edit-address" rows="3" class="w-full bg-white border-2 border-slate-200 rounded-xl px-4 py-3 font-medium text-sm text-slate-700 focus:border-blue-500 focus:ring-0 outline-none transition-colors shadow-sm"></textarea>
                     </div>
                 </div>
 
-                <button onclick="confirmOCRData()" class="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-bold py-4 rounded-2xl mt-6 shadow-[0_8px_30px_rgb(16,185,129,0.3)] flex items-center justify-center gap-2">
-                    <i data-lucide="check" class="w-5 h-5"></i> Confirm & Continue
+                <button onclick="confirmOCRData()" class="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white font-bold py-4 rounded-2xl mt-6 shadow-[0_8px_30px_rgb(16,185,129,0.3)] flex items-center justify-center gap-2 active:scale-[0.98] transition-all">
+                    <i data-lucide="check" class="w-5 h-5"></i> Confirm & Proceed to Selfie
                 </button>
             </div>
 
             <div id="view-selfie" class="view-section flex-1 flex-col items-center justify-center p-6">
-                <div class="text-center mb-6">
+                <div class="text-center mb-6 mt-2">
                     <h2 class="text-2xl font-black mb-2">Live Verification</h2>
-                    <p class="text-slate-500 text-sm px-4">Position face clearly in the circle.</p>
+                    <p class="text-slate-500 text-sm px-4" id="selfie-desc">Capture a live selfie to match with the uploaded Aadhaar photo.</p>
                 </div>
 
-                <div class="relative w-full max-w-[260px] aspect-[3/4] rounded-full overflow-hidden bg-slate-900 border-8 border-slate-100 shadow-2xl mb-8 flex items-center justify-center">
+                <div class="relative w-full max-w-[260px] aspect-[3/4] rounded-[2rem] overflow-hidden bg-slate-900 border-8 border-slate-100 shadow-2xl mb-6 flex items-center justify-center shrink-0">
                     <video id="selfie-video" autoplay playsinline muted class="w-full h-full object-cover transform -scale-x-100"></video>
-                    <div class="absolute inset-0 border-[4px] border-white/20 rounded-full m-3 pointer-events-none"></div>
+                    <img id="selfie-fallback-preview" class="w-full h-full object-cover hidden" />
+                    <div class="absolute inset-0 border-[4px] border-white/20 rounded-[1.8rem] m-3 pointer-events-none"></div>
                 </div>
 
-                <button onclick="captureSelfie()" class="w-full bg-slate-900 text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-3 text-lg shadow-xl active:scale-[0.98]">
+                <div id="selfie-cam-error" class="hidden w-full text-center text-amber-600 text-xs font-bold mb-4 bg-amber-50 p-3 rounded-xl border border-amber-200">
+                    <i data-lucide="alert-triangle" class="w-4 h-4 inline-block mb-0.5"></i> Live Camera blocked. Please upload a selfie.
+                </div>
+
+                <button id="btn-capture-selfie" onclick="captureSelfie()" class="w-full bg-slate-900 hover:bg-black text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-3 text-lg shadow-xl active:scale-[0.98] transition-all">
                     <div class="w-6 h-6 rounded-full border-2 border-white flex items-center justify-center p-0.5">
                         <div class="w-full h-full bg-white rounded-full"></div>
                     </div>
-                    Capture Photo
+                    Capture Face
                 </button>
+
+                <label id="btn-fallback-selfie" class="hidden w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-2xl cursor-pointer shadow-xl active:scale-[0.98] transition-all">
+                    <input type="file" accept="image/*" capture="user" class="hidden" onchange="handleSelfieFallback(event)">
+                    <div class="flex items-center justify-center gap-2 w-full text-lg">
+                        <i data-lucide="upload" class="w-5 h-5"></i> Upload Selfie Manually
+                    </div>
+                </label>
             </div>
 
             <div id="view-processing" class="view-section flex-1 flex-col items-center justify-center p-6">
-                <div class="relative w-32 h-32 mb-10">
+                <div class="relative w-32 h-32 mb-10 mt-8">
                     <svg class="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
                         <circle cx="50" cy="50" r="45" fill="none" stroke="#f1f5f9" stroke-width="8" />
                         <circle id="progress-ring" cx="50" cy="50" r="45" fill="none" stroke="#3b82f6" stroke-width="8" stroke-linecap="round" stroke-dasharray="283" stroke-dashoffset="283" class="transition-all duration-300 ease-out" />
@@ -232,45 +235,42 @@
                 </div>
 
                 <div class="space-y-4 w-full max-w-xs">
-                    <div class="flex items-center gap-3 text-sm font-semibold">
-                        <i id="proc-icon-1" data-lucide="loader-2" class="w-5 h-5 text-blue-500 animate-spin"></i>
-                        <span id="proc-text-1" class="text-slate-800">Analyzing Photo Quality...</span>
+                    <div class="flex items-center gap-3 text-sm font-semibold bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
+                        <i id="proc-icon-1" data-lucide="loader-2" class="w-5 h-5 text-blue-500 animate-spin shrink-0"></i>
+                        <span id="proc-text-1" class="text-slate-800">Analyzing Aadhaar Photo...</span>
                     </div>
-                    <div class="flex items-center gap-3 text-sm font-semibold opacity-40 transition-opacity" id="proc-step-2">
-                        <i id="proc-icon-2" data-lucide="loader-2" class="w-5 h-5 text-blue-500"></i>
+                    <div class="flex items-center gap-3 text-sm font-semibold opacity-40 bg-white p-3 rounded-xl border border-slate-100 shadow-sm" id="proc-step-2">
+                        <i id="proc-icon-2" data-lucide="loader-2" class="w-5 h-5 text-blue-500 shrink-0"></i>
                         <span id="proc-text-2" class="text-slate-800">Running Face Match AI...</span>
                     </div>
-                    <div class="flex items-center gap-3 text-sm font-semibold opacity-40 transition-opacity" id="proc-step-3">
-                        <i id="proc-icon-3" data-lucide="loader-2" class="w-5 h-5 text-blue-500"></i>
+                    <div class="flex items-center gap-3 text-sm font-semibold opacity-40 bg-white p-3 rounded-xl border border-slate-100 shadow-sm" id="proc-step-3">
+                        <i id="proc-icon-3" data-lucide="loader-2" class="w-5 h-5 text-blue-500 shrink-0"></i>
                         <span id="proc-text-3" class="text-slate-800">Calculating Exact Age...</span>
                     </div>
                 </div>
             </div>
 
-            <div id="view-result" class="view-section flex-1 flex-col items-center pt-6 pb-6 px-4">
+            <div id="view-result" class="view-section flex-1 flex-col items-center pt-6 px-4">
                 
-                <!-- Dynamic Status Header -->
-                <div id="res-header" class="flex flex-col items-center mb-6 w-full">
+                <div id="res-header" class="flex flex-col items-center mb-6 w-full mt-2">
                     <div id="res-icon-wrapper" class="w-20 h-20 rounded-full flex items-center justify-center mb-3 shadow-lg">
                         <i id="res-icon" data-lucide="shield-check" class="w-10 h-10 text-white"></i>
                     </div>
                     <h2 id="res-title" class="text-3xl font-black tracking-tight mb-1">Verified</h2>
                     <div class="bg-white px-4 py-1.5 rounded-full shadow-sm border border-slate-100 flex items-center gap-2 mt-2">
-                        <span class="text-[10px] font-bold uppercase text-slate-400">Match Score</span>
+                        <span class="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Photo Match</span>
                         <span id="res-score" class="text-sm font-black">98.4%</span>
                     </div>
                 </div>
 
-                <!-- Strict Data Card -->
-                <div class="w-full bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 overflow-hidden mb-6 flex-shrink-0">
-                    
+                <div class="w-full bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden mb-6 flex-shrink-0">
                     <div class="p-4 border-b border-slate-100 flex items-start gap-4">
-                        <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0 mt-1">
-                            <i data-lucide="user" class="w-5 h-5 text-slate-500"></i>
+                        <div class="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center flex-shrink-0 mt-1">
+                            <i data-lucide="user" class="w-5 h-5 text-blue-600"></i>
                         </div>
                         <div class="min-w-0">
                             <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Name</p>
-                            <p id="res-data-name" class="text-lg font-black text-slate-800 truncate">Rahul Sharma</p>
+                            <p id="res-data-name" class="text-lg font-black text-slate-800 truncate"></p>
                         </div>
                     </div>
 
@@ -278,42 +278,42 @@
                         <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2">Age (As on Today)</p>
                         <div class="flex gap-2 w-full mb-3">
                             <div class="bg-white border border-slate-200 rounded-xl p-2 flex-1 text-center shadow-sm">
-                                <span id="res-data-years" class="block text-xl font-black text-indigo-600">21</span>
+                                <span id="res-data-years" class="block text-xl font-black text-indigo-600">0</span>
                                 <span class="text-[9px] text-slate-500 font-bold uppercase">Years</span>
                             </div>
                             <div class="bg-white border border-slate-200 rounded-xl p-2 flex-1 text-center shadow-sm">
-                                <span id="res-data-months" class="block text-xl font-black text-indigo-600">4</span>
+                                <span id="res-data-months" class="block text-xl font-black text-indigo-600">0</span>
                                 <span class="text-[9px] text-slate-500 font-bold uppercase">Months</span>
                             </div>
                             <div class="bg-white border border-slate-200 rounded-xl p-2 flex-1 text-center shadow-sm">
-                                <span id="res-data-days" class="block text-xl font-black text-indigo-600">17</span>
+                                <span id="res-data-days" class="block text-xl font-black text-indigo-600">0</span>
                                 <span class="text-[9px] text-slate-500 font-bold uppercase">Days</span>
                             </div>
                         </div>
-                        <p class="text-xs text-slate-600 font-medium">Date of Birth: <span id="res-data-dob" class="font-bold text-slate-800">15-08-2004</span></p>
+                        <p class="text-xs text-slate-600 font-medium">Date of Birth: <span id="res-data-dob" class="font-bold text-slate-800"></span></p>
                     </div>
 
                     <div class="p-4 flex items-start gap-4">
-                        <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0 mt-1">
-                            <i data-lucide="map-pin" class="w-5 h-5 text-slate-500"></i>
+                        <div class="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center flex-shrink-0 mt-1">
+                            <i data-lucide="map-pin" class="w-5 h-5 text-amber-600"></i>
                         </div>
                         <div class="min-w-0">
                             <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Address</p>
-                            <p id="res-data-address" class="text-sm font-medium text-slate-700 leading-snug line-clamp-3">Kolkata, West Bengal</p>
+                            <p id="res-data-address" class="text-sm font-medium text-slate-700 leading-snug line-clamp-3"></p>
                         </div>
                     </div>
                 </div>
 
                 <button onclick="finishVerification()" class="w-full mt-auto bg-slate-900 hover:bg-black text-white font-bold py-4 rounded-2xl transition-all shadow-xl active:scale-[0.98]">
-                    Finish & Clear Memory
+                    Home / Verify Next Player
                 </button>
-                <p class="text-[9px] text-slate-400 font-medium text-center mt-3 uppercase tracking-widest"><i data-lucide="trash-2" class="w-3 h-3 inline pb-0.5"></i> All local data will be securely erased</p>
+                <p class="text-[9px] text-slate-400 font-medium text-center mt-3 uppercase tracking-widest"><i data-lucide="trash-2" class="w-3 h-3 inline pb-0.5"></i> Local memory securely cleared</p>
             </div>
 
         </div>
     </div>
 
-    <!-- Hidden Canvases for Logic -->
+    <!-- Hidden Elements for Processing -->
     <canvas id="canvas-ref" class="hidden"></canvas>
     <canvas id="canvas-selfie" class="hidden"></canvas>
     <img id="img-ref-store" class="hidden">
@@ -322,18 +322,13 @@
     <script>
         lucide.createIcons();
 
-        // Strict App State
         let state = {
-            name: '',
-            dob: '',
-            address: '',
-            frontLoaded: false,
-            backLoaded: false,
-            qrTimer: null,
-            videoStream: null,
-            html5QrCode: null
+            name: '', dob: '', address: '',
+            frontLoaded: false, backLoaded: false,
+            qrTimer: null, videoStream: null, html5QrCode: null
         };
 
+        // 1. Initialize Face Match AI Models
         async function loadAI() {
             try {
                 const MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights/';
@@ -346,7 +341,7 @@
                 document.getElementById('btn-start').classList.add('flex');
             } catch (error) {
                 console.error("AI Load Error", error);
-                alert("Failed to load AI Engine. Check internet connection.");
+                alert("Failed to load Face AI Engine. Ensure you have an internet connection.");
             }
         }
         window.onload = loadAI;
@@ -359,13 +354,13 @@
 
         function startWorkflow() {
             if(window.firebaseAnalytics) {
-                // Using try-catch to prevent breaking if analytics fails
-                try { window.firebaseBridge?.trackEvent('verification_started'); } catch(e){}
+                try { logEvent(window.firebaseAnalytics, 'verification_started'); } catch(e){}
             }
             showView('view-scan');
             startScanner();
         }
 
+        // 2. QR Scanner
         function startScanner() {
             state.html5QrCode = new Html5Qrcode("qr-reader");
             const config = { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 };
@@ -376,15 +371,11 @@
 
             state.html5QrCode.start({ facingMode: "environment" }, config,
                 (decodedText) => {
-                    // Success
                     clearTimeout(state.qrTimer);
-                    state.html5QrCode.stop().then(() => {
-                        processQRData(decodedText);
-                    });
+                    state.html5QrCode.stop().then(() => processQRData(decodedText));
                 },
-                (err) => { /* ignore read errors */ }
+                (err) => { /* ignore standard read errors */ }
             ).then(() => {
-                // Scanner started, begin 10s countdown
                 state.qrTimer = setInterval(() => {
                     timeLeft--;
                     document.getElementById('timer-count').innerText = timeLeft;
@@ -409,49 +400,40 @@
 
         function processQRData(xmlText) {
             try {
-                // Naive XML extraction since secure QR is complex.
-                // Mask Aadhaar if found
-                const aadharMatch = xmlText.match(/uid="(\d{12})"/i);
-                if(aadharMatch) {
-                    // We DO NOT store this.
-                    xmlText = xmlText.replace(aadharMatch[1], "XXXX-XXXX-XXXX");
-                }
-
-                let name = xmlText.match(/name="([^"]+)"/i);
-                let dob = xmlText.match(/dob="([^"]+)"/i) || xmlText.match(/yob="([^"]+)"/i);
-                let dist = xmlText.match(/dist="([^"]+)"/i);
+                let nameMatch = xmlText.match(/name="([^"]+)"/i);
+                let dobMatch = xmlText.match(/dob="([^"]+)"/i) || xmlText.match(/yob="([^"]+)"/i);
+                let distMatch = xmlText.match(/dist="([^"]+)"/i);
                 let stateMatch = xmlText.match(/state="([^"]+)"/i);
 
-                if(name) state.name = name[1];
-                if(dob) {
-                    let d = dob[1];
+                if(nameMatch) state.name = nameMatch[1];
+                if(dobMatch) {
+                    let d = dobMatch[1];
                     state.dob = d.length === 4 ? `01-01-${d}` : d; 
                 }
                 
                 let addr = [];
-                if(dist) addr.push(dist[1]);
+                if(distMatch) addr.push(distMatch[1]);
                 if(stateMatch) addr.push(stateMatch[1]);
                 state.address = addr.join(", ");
 
-                // Secure QR photos are compressed JP2000 binaries. 
-                // Since browser JS cannot natively decode JP2000, if we reach here via QR, 
-                // we still need a reference photo for the AI.
-                // We will route them to capture ONLY the front photo for AI reference.
                 showView('view-manual');
-                document.getElementById('file-back').parentElement.style.display = 'none'; // Hide back upload
-                document.querySelector('#view-manual p').innerText = "QR Scanned! Please upload the FRONT of the card to extract the reference photo.";
-                
-                // Prefill state so OCR step is skipped later
-                state.backLoaded = true; // Pretend back is loaded
+                document.getElementById('upload-back-container').style.display = 'none'; 
+                state.backLoaded = true; // Pretend back is loaded for QR path
                 
             } catch(e) {
                 fallbackToManual();
             }
         }
 
+        // 3. Manual Capture & Upload
         function handleFileUpload(event, side) {
             const file = event.target.files[0];
             if(!file) return;
+
+            if(file.type === "application/pdf") {
+                alert("For best processing, please upload an Image (JPG/PNG) instead of a PDF.");
+                return;
+            }
 
             const reader = new FileReader();
             reader.onload = (e) => {
@@ -462,7 +444,7 @@
                 
                 if(side === 'front') {
                     state.frontLoaded = true;
-                    document.getElementById('img-ref-store').src = e.target.result; // Store for AI
+                    document.getElementById('img-ref-store').src = e.target.result; 
                 }
                 if(side === 'back') state.backLoaded = true;
 
@@ -473,58 +455,108 @@
             reader.readAsDataURL(file);
         }
 
-        async function startOCR() {
-            // If QR already populated details, skip OCR text extraction
-            if(state.name !== '') {
+        function getBase64FromImage(imgElement) {
+            // Compress and convert to base64 for Gemini
+            const canvas = document.createElement('canvas');
+            const MAX_WIDTH = 1200; 
+            let width = imgElement.naturalWidth || imgElement.width || 1200;
+            let height = imgElement.naturalHeight || imgElement.height || 1200;
+
+            if (width > MAX_WIDTH) {
+                height = Math.floor(height * (MAX_WIDTH / width));
+                width = MAX_WIDTH;
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = 'white'; 
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(imgElement, 0, 0, width, height);
+            
+            const dataURL = canvas.toDataURL('image/jpeg', 0.8);
+            // Return only the base64 string without the data URI prefix
+            return dataURL.split(',')[1]; 
+        }
+
+        // 4. Gemini AI Data Extraction
+        async function startGeminiExtraction() {
+            if(GEMINI_API_KEY === "YOUR_GEMINI_API_KEY" || GEMINI_API_KEY.trim() === "") {
+                alert("Configuration Error: Please set your Gemini API Key in the source code to use AI extraction.");
+                return;
+            }
+
+            if(state.name !== '' && state.dob !== '') {
                 populateEditScreen();
                 return;
             }
 
             const btn = document.getElementById('btn-extract-ocr');
-            btn.innerHTML = `<i data-lucide="loader-2" class="w-5 h-5 animate-spin"></i> Processing OCR...`;
+            btn.innerHTML = `<i data-lucide="loader-2" class="w-5 h-5 animate-spin text-amber-300"></i> Extracting via Gemini...`;
             btn.disabled = true;
             lucide.createIcons();
 
             try {
-                // Tesseract on Front
-                const frontResult = await Tesseract.recognize(document.getElementById('preview-front').src, 'eng');
-                const frontText = frontResult.data.text;
-                
-                // Tesseract on Back
-                const backResult = await Tesseract.recognize(document.getElementById('preview-back').src, 'eng');
-                const backText = backResult.data.text;
+                const promptText = `
+                You are an AI assistant specialized in extracting data from Indian Aadhaar cards.
+                Analyze the provided ID card image(s).
+                Extract the following details:
+                1. Full Name
+                2. Date of Birth (Format exactly as DD-MM-YYYY)
+                3. Address (Full address as printed)
 
-                parseOCRData(frontText, backText);
-                populateEditScreen();
+                Return ONLY a valid JSON object. No markdown, no formatting, no extra text.
+                Format: {"name": "extracted name", "dob": "DD-MM-YYYY", "address": "extracted address"}
+                If a field is not found, leave it as an empty string.`;
+
+                let parts = [{ text: promptText }];
+
+                const frontImg = document.getElementById('preview-front');
+                if (frontImg && frontImg.src && frontImg.src.startsWith('data:')) {
+                    const frontBase64 = getBase64FromImage(frontImg);
+                    parts.push({ inline_data: { mime_type: "image/jpeg", data: frontBase64 } });
+                }
+                
+                const backImg = document.getElementById('preview-back');
+                if (backImg && backImg.src && backImg.src.startsWith('data:')) {
+                    const backBase64 = getBase64FromImage(backImg);
+                    parts.push({ inline_data: { mime_type: "image/jpeg", data: backBase64 } });
+                }
+
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+                
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: parts }]
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Gemini API returned status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                const responseText = data.candidates[0].content.parts[0].text;
+                
+                // Clean up possible markdown backticks if Gemini stubbornly includes them
+                let cleanJsonString = responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
+                
+                const extracted = JSON.parse(cleanJsonString);
+
+                state.name = extracted.name || state.name;
+                state.dob = extracted.dob || state.dob;
+                state.address = extracted.address || state.address;
 
             } catch (err) {
-                console.error("OCR Failed", err);
-                alert("OCR extraction failed. Please enter details manually.");
-                populateEditScreen(); // Let them enter manually
-            }
-        }
-
-        function parseOCRData(frontText, backText) {
-            // DOB Regex
-            const dobMatch = frontText.match(/(?:DOB|Birth|YOB).*?(\d{2}[/-]\d{2}[/-]\d{4}|\d{4})/i) || frontText.match(/(\d{2}[/-]\d{2}[/-]\d{4})/);
-            if(dobMatch) {
-                let d = dobMatch[1].replace(/\//g, '-');
-                state.dob = d.length === 4 ? `01-01-${d}` : d;
-            }
-
-            // Name Heuristic (Filter out typical Aadhaar words, grab longest alpha line)
-            const lines = frontText.split('\n').map(l => l.trim()).filter(l => l.length > 3);
-            const noise = /government|india|dob|male|female|aadhaar|father|issue|download/i;
-            const nameCandidates = lines.filter(l => !/\d/.test(l) && !noise.test(l) && /^[A-Z][a-z\sA-Z]+$/.test(l));
-            if(nameCandidates.length > 0) state.name = nameCandidates[0];
-
-            // Address Heuristic
-            const bLines = backText.split('\n').map(l => l.trim());
-            const addrStart = bLines.findIndex(l => /address/i.test(l));
-            if(addrStart !== -1) {
-                let addrBlock = bLines.slice(addrStart).join(', ').replace(/^address[:\s,]*/i, '').trim();
-                // Clean up string logic
-                state.address = addrBlock.substring(0, 80); // Take reasonable chunk
+                console.error("Gemini Extraction Failed", err);
+                alert("Gemini AI extraction failed. You can enter details manually on the next screen.");
+            } finally {
+                btn.innerHTML = `<i data-lucide="sparkles" class="w-5 h-5 text-amber-300"></i> Extract with Gemini`;
+                btn.disabled = false;
+                lucide.createIcons();
+                populateEditScreen(); 
             }
         }
 
@@ -541,7 +573,7 @@
             state.address = document.getElementById('edit-address').value.trim();
 
             if(!state.name || !state.dob) {
-                alert("Name and Date of Birth are mandatory.");
+                alert("Please provide the Name and Date of Birth to proceed.");
                 return;
             }
             
@@ -551,24 +583,34 @@
 
         function startSelfieCamera() {
             const video = document.getElementById('selfie-video');
+            
+            document.getElementById('selfie-cam-error').classList.add('hidden');
+            document.getElementById('btn-capture-selfie').classList.remove('hidden');
+            document.getElementById('btn-fallback-selfie').classList.add('hidden');
+            document.getElementById('selfie-fallback-preview').classList.add('hidden');
+            video.classList.remove('hidden');
+
             navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
                 .then(stream => {
                     state.videoStream = stream;
                     video.srcObject = stream;
                 })
                 .catch(err => {
-                    console.error("Selfie camera blocked", err);
-                    alert("Camera permission denied. Cannot proceed with verification.");
+                    console.error("Selfie camera denied", err);
+                    document.getElementById('selfie-cam-error').classList.remove('hidden');
+                    document.getElementById('btn-capture-selfie').classList.add('hidden');
+                    document.getElementById('btn-fallback-selfie').classList.remove('hidden');
+                    document.getElementById('btn-fallback-selfie').classList.add('block');
+                    video.classList.add('hidden');
                 });
         }
 
         function captureSelfie() {
             const video = document.getElementById('selfie-video');
             const canvas = document.getElementById('canvas-selfie');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
+            canvas.width = video.videoWidth || 400; 
+            canvas.height = video.videoHeight || 400;
             
-            // Mirror flip matching CSS
             const ctx = canvas.getContext('2d');
             ctx.translate(canvas.width, 0);
             ctx.scale(-1, 1);
@@ -576,40 +618,56 @@
 
             document.getElementById('img-selfie-store').src = canvas.toDataURL('image/jpeg', 0.8);
             
-            // Stop Camera
             if (state.videoStream) {
                 state.videoStream.getTracks().forEach(track => track.stop());
                 state.videoStream = null;
             }
 
-            processAI();
+            processFaceAI();
         }
 
-        async function processAI() {
+        function handleSelfieFallback(event) {
+            const file = event.target.files[0];
+            if(!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const preview = document.getElementById('selfie-fallback-preview');
+                preview.src = e.target.result;
+                preview.classList.remove('hidden');
+                document.getElementById('selfie-desc').innerText = "Selfie uploaded successfully.";
+                
+                const storeImg = document.getElementById('img-selfie-store');
+                storeImg.onload = () => { processFaceAI(); };
+                storeImg.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        async function processFaceAI() {
             showView('view-processing');
             
             let pRing = document.getElementById('progress-ring');
             let pText = document.getElementById('progress-text');
             const circ = 2 * Math.PI * 45;
 
-            // Fake UI progression for UX
             let pct = 0;
             const uiInterval = setInterval(() => {
                 pct += 4;
-                if(pct > 90) pct = 90; // hold at 90 until real AI finishes
+                if(pct > 90) pct = 90; 
                 pRing.style.strokeDashoffset = circ - (pct / 100) * circ;
                 pText.innerText = `${pct}%`;
 
                 if(pct > 20) {
                     document.getElementById('proc-icon-1').classList.replace('animate-spin', 'hidden');
-                    document.getElementById('proc-icon-1').outerHTML = `<i data-lucide="check-circle-2" class="w-5 h-5 text-emerald-500"></i>`;
+                    document.getElementById('proc-icon-1').outerHTML = `<i data-lucide="check-circle-2" class="w-5 h-5 text-emerald-500 shrink-0"></i>`;
                     document.getElementById('proc-step-2').classList.remove('opacity-40');
                     document.getElementById('proc-icon-2').classList.add('animate-spin');
                     lucide.createIcons();
                 }
                 if(pct > 60) {
                     document.getElementById('proc-icon-2').classList.replace('animate-spin', 'hidden');
-                    document.getElementById('proc-icon-2').outerHTML = `<i data-lucide="check-circle-2" class="w-5 h-5 text-emerald-500"></i>`;
+                    document.getElementById('proc-icon-2').outerHTML = `<i data-lucide="check-circle-2" class="w-5 h-5 text-emerald-500 shrink-0"></i>`;
                     document.getElementById('proc-step-3').classList.remove('opacity-40');
                     document.getElementById('proc-icon-3').classList.add('animate-spin');
                     lucide.createIcons();
@@ -620,6 +678,11 @@
                 const refImg = document.getElementById('img-ref-store');
                 const selfImg = document.getElementById('img-selfie-store');
 
+                if(!refImg.src || !selfImg.src || refImg.src.indexOf('data:') === -1 || selfImg.src.indexOf('data:') === -1) {
+                    throw new Error("Missing required image data for Face API comparison");
+                }
+
+                // Strictly keeping biometric matching local via face-api.js for privacy and to avoid LLM safety blocks.
                 const opts = new faceapi.TinyFaceDetectorOptions();
                 const refDet = await faceapi.detectSingleFace(refImg, opts).withFaceLandmarks().withFaceDescriptor();
                 const selfDet = await faceapi.detectSingleFace(selfImg, opts).withFaceLandmarks().withFaceDescriptor();
@@ -629,25 +692,16 @@
 
                 if (refDet && selfDet) {
                     const dist = faceapi.euclideanDistance(refDet.descriptor, selfDet.descriptor);
-                    // Match Rules:
-                    // Euclidean distance typically ranges 0.3 to 0.6 for same person.
-                    // Let's map distance to a strict percentage.
-                    // < 0.40 -> >98% (Excellent)
-                    // 0.40 - 0.50 -> 90-97% (Good)
-                    // > 0.50 -> <90% (Failed)
                     
-                    let baseScore = 100 - (dist * 100); 
-                    // adjustment curve to fit requirement:
                     if(dist <= 0.40) {
                         matchPercent = 98 + ((0.40 - dist) * 10);
                     } else if (dist <= 0.50) {
                         matchPercent = 90 + ((0.50 - dist) * 70);
                     } else {
-                        matchPercent = Math.max(0, 100 - (dist * 130)); // Drops rapidly below 90
+                        matchPercent = Math.max(0, 100 - (dist * 130)); 
                     }
                     
                     matchPercent = Math.min(100, matchPercent).toFixed(2);
-                    
                     if(matchPercent >= 90) status = "Verified";
                 }
 
@@ -658,21 +712,23 @@
                 setTimeout(() => renderResult(status, matchPercent), 500);
 
             } catch (err) {
-                console.error("AI Error", err);
+                console.error("Face AI Error", err);
                 clearInterval(uiInterval);
-                // Hard fail
                 renderResult("Failed", "0.00");
             }
         }
 
         function calculateAge(dobStr) {
+            if (!dobStr || dobStr.trim() === '') {
+                return { years: 0, months: 0, days: 0 };
+            }
+
             let day=1, month=1, year=2000;
             const parts = dobStr.split(/[-/]/);
             if(parts.length === 3) {
                 day = parseInt(parts[0]);
                 month = parseInt(parts[1]);
                 year = parseInt(parts[2]);
-                // Handle YYYY-MM-DD edge cases
                 if(year < 100) year += 2000;
                 if(parts[0].length === 4) { year = parseInt(parts[0]); day = parseInt(parts[2]); }
             } else if (dobStr.length === 4) {
@@ -680,8 +736,9 @@
             }
 
             const birthDate = new Date(`${year}-${month}-${day}`);
-            const today = new Date();
+            if (isNaN(birthDate.getTime())) return { years: 0, months: 0, days: 0 };
 
+            const today = new Date();
             let years = today.getFullYear() - birthDate.getFullYear();
             let months = today.getMonth() - birthDate.getMonth();
             let days = today.getDate() - birthDate.getDate();
@@ -701,16 +758,14 @@
         function renderResult(status, score) {
             const age = calculateAge(state.dob);
 
-            // Populate text
-            document.getElementById('res-data-name').innerText = state.name;
-            document.getElementById('res-data-dob').innerText = state.dob;
+            document.getElementById('res-data-name').innerText = state.name || "Unknown";
+            document.getElementById('res-data-dob').innerText = state.dob || "Missing";
             document.getElementById('res-data-years').innerText = age.years;
             document.getElementById('res-data-months').innerText = age.months;
             document.getElementById('res-data-days').innerText = age.days;
             document.getElementById('res-data-address').innerText = state.address || "Not Extracted";
             document.getElementById('res-score').innerText = `${score}%`;
 
-            // Style based on status
             const wrapper = document.getElementById('res-icon-wrapper');
             const icon = document.getElementById('res-icon');
             const title = document.getElementById('res-title');
@@ -734,25 +789,26 @@
         }
 
         function finishVerification() {
-            // 1. Destroy Image Data
+            // STRICT PRIVACY: Destroy Image Data immediately
             document.getElementById('img-ref-store').src = "";
             document.getElementById('img-selfie-store').src = "";
             document.getElementById('preview-front').src = "";
             document.getElementById('preview-back').src = "";
+            document.getElementById('selfie-fallback-preview').src = "";
             
-            // 2. Clear Canvas
+            // Clear Canvas Memory
             const cRef = document.getElementById('canvas-ref');
             cRef.getContext('2d').clearRect(0,0,cRef.width, cRef.height);
             const cSelfie = document.getElementById('canvas-selfie');
             cSelfie.getContext('2d').clearRect(0,0,cSelfie.width, cSelfie.height);
 
-            // 3. Clear State Object
+            // Clear State Object
             state = {
                 name: '', dob: '', address: '', frontLoaded: false, backLoaded: false,
                 qrTimer: null, videoStream: null, html5QrCode: null
             };
 
-            // 4. Reset DOM values
+            // Reset DOM Input values
             document.getElementById('edit-name').value = '';
             document.getElementById('edit-dob').value = '';
             document.getElementById('edit-address').value = '';
@@ -762,18 +818,21 @@
             document.getElementById('preview-back').classList.add('hidden');
             document.getElementById('overlay-front').classList.add('hidden');
             document.getElementById('overlay-back').classList.add('hidden');
-            document.getElementById('file-back').parentElement.style.display = 'block';
+            document.getElementById('upload-back-container').style.display = 'block';
 
-            // 5. Reset Processing UI
+            // Reset Processing UI Status
             document.getElementById('progress-ring').style.strokeDashoffset = 283;
             document.getElementById('progress-text').innerText = '0%';
             document.getElementById('proc-step-2').classList.add('opacity-40');
             document.getElementById('proc-step-3').classList.add('opacity-40');
-            document.getElementById('proc-icon-1').outerHTML = `<i id="proc-icon-1" data-lucide="loader-2" class="w-5 h-5 text-blue-500 animate-spin"></i>`;
-            document.getElementById('proc-icon-2').outerHTML = `<i id="proc-icon-2" data-lucide="loader-2" class="w-5 h-5 text-blue-500"></i>`;
-            document.getElementById('proc-icon-3').outerHTML = `<i id="proc-icon-3" data-lucide="loader-2" class="w-5 h-5 text-blue-500"></i>`;
+            document.getElementById('proc-icon-1').outerHTML = `<i id="proc-icon-1" data-lucide="loader-2" class="w-5 h-5 text-blue-500 animate-spin shrink-0"></i>`;
+            document.getElementById('proc-icon-2').outerHTML = `<i id="proc-icon-2" data-lucide="loader-2" class="w-5 h-5 text-blue-500 shrink-0"></i>`;
+            document.getElementById('proc-icon-3').outerHTML = `<i id="proc-icon-3" data-lucide="loader-2" class="w-5 h-5 text-blue-500 shrink-0"></i>`;
 
-            // 6. Stop all streams
+            const btnOcr = document.getElementById('btn-extract-ocr');
+            btnOcr.innerHTML = `<i data-lucide="sparkles" class="w-5 h-5 text-amber-300"></i> Extract with Gemini`;
+            btnOcr.disabled = true;
+
             if(state.html5QrCode) {
                 try { state.html5QrCode.stop(); } catch(e){}
             }
